@@ -1,0 +1,8 @@
+{
+  "name": "LuminaCommerce Admin",
+  "description": "A production-ready E-commerce CMS built with React, Tailwind, and Gemini AI for intelligent product management and business insights.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}

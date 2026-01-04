@@ -7,9 +7,10 @@ interface SidebarProps {
   setActiveView: (view: string) => void;
   user: User;
   onLogout: () => void;
+  onOpenAI: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView, user, onLogout }) => {
+const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView, user, onLogout, onOpenAI }) => {
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: '📊', roles: ['super-admin', 'admin', 'manager', 'support', 'warehouse'] },
     { id: 'categories', label: 'Categories', icon: '📁', roles: ['super-admin', 'admin', 'manager'] },
@@ -35,6 +36,17 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView, user, onLo
           Lumina Admin
         </h1>
       </div>
+
+      <div className="px-4 mb-4">
+        <button 
+          onClick={onOpenAI}
+          className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-2xl bg-indigo-600 text-white font-black text-xs shadow-xl shadow-indigo-100 hover:bg-indigo-700 hover:-translate-y-0.5 transition-all active:scale-95"
+        >
+          <span className="text-lg">✨</span>
+          <span>Lumina AI Command</span>
+        </button>
+      </div>
+
       <nav className="flex-1 px-4 space-y-1 overflow-y-auto custom-scrollbar">
         {filteredMenu.map((item) => (
           <button

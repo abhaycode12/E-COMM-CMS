@@ -16,6 +16,7 @@ const salesData = [
 
 const Dashboard: React.FC = () => {
   const [aiInsights, setAiInsights] = useState<string>('Analyzing trends...');
+  const [shortcutText, setShortcutText] = useState('⌘K');
 
   useEffect(() => {
     const fetchInsights = async () => {
@@ -23,6 +24,10 @@ const Dashboard: React.FC = () => {
       setAiInsights(insights || 'No insights available.');
     };
     fetchInsights();
+
+    // Set shortcut text based on OS
+    const isMac = navigator.userAgent.toUpperCase().indexOf('MAC') >= 0;
+    setShortcutText(isMac ? '⌘K' : 'Ctrl+K');
   }, []);
 
   return (
@@ -30,7 +35,7 @@ const Dashboard: React.FC = () => {
       <header className="flex justify-between items-center">
         <div>
           <h2 className="text-3xl font-black text-gray-900 tracking-tight">System Overview</h2>
-          <p className="text-gray-500">Lumina is monitoring your business in real-time. Use <kbd className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200 text-xs font-black">⌘K</kbd> to command.</p>
+          <p className="text-gray-500">Lumina is monitoring your business in real-time. Use <kbd className="bg-white px-2 py-0.5 rounded-lg border-2 border-gray-200 text-xs font-black shadow-sm text-indigo-600">{shortcutText}</kbd> to command.</p>
         </div>
         <div className="flex gap-3">
           <button className="px-6 py-3 border border-gray-200 rounded-2xl bg-white text-gray-600 font-bold hover:bg-gray-50 transition-all">Export Report</button>

@@ -21,6 +21,7 @@ const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [activeView, setActiveView] = useState('dashboard');
   const [isInitializing, setIsInitializing] = useState(true);
+  const [isAICommandOpen, setIsAICommandOpen] = useState(false);
 
   useEffect(() => {
     // Check local storage for session
@@ -102,6 +103,7 @@ const App: React.FC = () => {
         setActiveView={setActiveView} 
         user={user} 
         onLogout={handleLogout} 
+        onOpenAI={() => setIsAICommandOpen(true)}
       />
       
       <main className="flex-1 ml-64 p-8">
@@ -110,15 +112,30 @@ const App: React.FC = () => {
         </div>
       </main>
 
-      <AICommandCenter onNavigate={(view) => setActiveView(view)} />
+      <AICommandCenter 
+        isOpen={isAICommandOpen} 
+        setIsOpen={setIsAICommandOpen} 
+        onNavigate={(view) => setActiveView(view)} 
+      />
 
       {/* Persistent Call to Action / Support Floating Button */}
-      <button className="fixed bottom-8 right-8 w-14 h-14 bg-indigo-600 text-white rounded-full shadow-2xl flex items-center justify-center hover:scale-110 transition-transform z-40 group">
-        <span className="text-2xl">💬</span>
-        <span className="absolute right-full mr-4 bg-gray-900 text-white px-3 py-1 rounded-lg text-sm opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-          Contact Support
-        </span>
-      </button>
+      <div className="fixed bottom-8 right-8 flex flex-col gap-4">
+        <button 
+          onClick={() => setIsAICommandOpen(true)}
+          className="w-14 h-14 bg-indigo-600 text-white rounded-2xl shadow-2xl flex items-center justify-center hover:scale-110 transition-transform z-40 group border-2 border-white/20"
+        >
+          <span className="text-2xl">✨</span>
+          <span className="absolute right-full mr-4 bg-gray-900 text-white px-3 py-1 rounded-lg text-xs font-black opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+            Lumina AI
+          </span>
+        </button>
+        <button className="w-14 h-14 bg-white text-gray-600 rounded-2xl shadow-2xl flex items-center justify-center hover:scale-110 transition-transform z-40 group border border-gray-100">
+          <span className="text-2xl">💬</span>
+          <span className="absolute right-full mr-4 bg-gray-900 text-white px-3 py-1 rounded-lg text-xs font-black opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
+            Human Support
+          </span>
+        </button>
+      </div>
     </div>
   );
 };

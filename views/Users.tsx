@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { User, UserRole, Role, ModuleType, ActionType, UserPermissionOverride } from '../types';
 import AuditLogTable from '../components/AuditLogTable';
@@ -10,8 +9,9 @@ interface UsersProps {
 
 const MOCK_ROLES: Role[] = [
   { id: 'role-sa', name: 'super-admin', display_name: 'Super Administrator', is_active: true, permissions: ['*'], created_at: '2025-01-01' },
-  { id: 'role-manager', name: 'manager', display_name: 'Store Manager', is_active: true, permissions: ['products.view', 'products.edit'], created_at: '2025-01-05' },
-  { id: 'role-support', name: 'support', display_name: 'Support Agent', is_active: true, permissions: ['customers.view', 'orders.view'], created_at: '2025-01-10' },
+  { id: 'role-manager', name: 'manager', display_name: 'Store Manager', is_active: true, permissions: ['products.view', 'products.edit', 'categories.view', 'categories.create', 'categories.edit'], created_at: '2025-01-05' },
+  { id: 'role-support', name: 'support', display_name: 'Support Agent', is_active: true, permissions: ['customers.view', 'orders.view', 'orders.approve'], created_at: '2025-01-10' },
+  { id: 'role-warehouse', name: 'warehouse', display_name: 'Warehouse Operations', is_active: true, permissions: ['products.view', 'orders.view'], created_at: '2025-01-12' },
 ];
 
 const MOCK_USERS: User[] = [
@@ -33,11 +33,19 @@ const MOCK_USERS: User[] = [
     role: 'manager', 
     roles: ['role-manager'], 
     avatar: 'https://i.pravatar.cc/150?u=sarah', 
-    permissions: ['products.view', 'products.edit'], 
+    permissions: ['products.view', 'products.edit', 'categories.view', 'categories.create', 'categories.edit', 'orders.view'], 
     overrides: [{ permission_id: 'orders.view', is_allowed: true }],
     last_login: '2025-02-17 04:30 PM' 
   }
 ];
+
+const ROLE_ID_MAP: Record<UserRole, string> = {
+  'super-admin': 'role-sa',
+  'admin': 'role-manager',
+  'manager': 'role-manager',
+  'support': 'role-support',
+  'warehouse': 'role-warehouse'
+};
 
 const Users: React.FC<UsersProps> = ({ notify }) => {
   const [users, setUsers] = useState<User[]>(MOCK_USERS);
@@ -48,11 +56,29 @@ const Users: React.FC<UsersProps> = ({ notify }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string[]>>({});
 
+  const calculateMergedPermissions = (roles: string[], overrides: UserPermissionOverride[]): string[] => {
+    const inherited = roles.map(rid => MOCK_ROLES.find(r => r.id === rid)?.permissions || []).flat();
+    if (inherited.includes('*')) return ['*'];
+
+    let merged = [...new Set(inherited)];
+    overrides.forEach(o => {
+      if (o.is_allowed) {
+        if (!merged.includes(o.permission_id)) merged.push(o.permission_id);
+      } else {
+        merged = merged.filter(p => p !== o.permission_id);
+      }
+    });
+    return merged;
+  };
+
   const validateUser = (data: Partial<User>): boolean => {
     const newErrors: Record<string, string[]> = {};
     if (!data.name?.trim()) newErrors.name = ["Full name is required"];
     if (!data.email?.trim() || !/^\S+@\S+\.\S+$/.test(data.email)) {
       newErrors.email = ["A valid corporate email is required"];
+    }
+    if (!data.roles || data.roles.length === 0) {
+      newErrors.roles = ["Assign at least one system role"];
     }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -64,24 +90,25 @@ const Users: React.FC<UsersProps> = ({ notify }) => {
 
     setIsSubmitting(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise(resolve => setTimeout(resolve, 1200));
       
+      const finalPermissions = calculateMergedPermissions(editingUser.roles || [], editingUser.overrides || []);
+      const finalUser = {
+        ...editingUser,
+        permissions: finalPermissions
+      } as User;
+
       if (editingUser.id) {
-        setUsers(prev => prev.map(u => u.id === editingUser.id ? { ...u, ...editingUser } as User : u));
-        notify?.(`Identity protocol for ${editingUser.name} synchronized.`, "success");
+        setUsers(prev => prev.map(u => u.id === editingUser.id ? finalUser : u));
+        notify?.(`Identity protocol for ${finalUser.name} synchronized.`, "success");
       } else {
         const newUser: User = {
+          ...finalUser,
           id: Math.random().toString(36).substr(2, 9),
-          name: editingUser.name!,
-          email: editingUser.email!,
-          role: editingUser.role || 'support',
-          roles: editingUser.roles || [],
-          avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(editingUser.name!)}`,
-          permissions: [],
-          overrides: editingUser.overrides || [],
+          avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(finalUser.name)}`,
           last_login: 'Pending Activation'
         };
-        setUsers(prev => [...prev, newUser]);
+        setUsers(prev => [newUser, ...prev]);
         notify?.(`Invitation dispatched to ${newUser.email}`, "success");
       }
       setShowModal(false);
@@ -115,11 +142,32 @@ const Users: React.FC<UsersProps> = ({ notify }) => {
     setEditingUser(prev => {
       if (!prev) return null;
       const currentRoles = [...(prev.roles || [])];
+      let updatedRoles: string[];
+      
       if (currentRoles.includes(roleId)) {
-        return { ...prev, roles: currentRoles.filter(r => r !== roleId) };
+        updatedRoles = currentRoles.filter(r => r !== roleId);
       } else {
-        return { ...prev, roles: [...currentRoles, roleId] };
+        updatedRoles = [...currentRoles, roleId];
       }
+
+      // Automatically update the primary 'role' tag if it's currently empty or orphaned
+      let updatedPrimaryRole = prev.role;
+      if (updatedRoles.length > 0 && (!prev.role || !updatedRoles.includes(ROLE_ID_MAP[prev.role]))) {
+        const firstRole = MOCK_ROLES.find(r => r.id === updatedRoles[0]);
+        if (firstRole) updatedPrimaryRole = firstRole.name as UserRole;
+      }
+
+      return { ...prev, roles: updatedRoles, role: updatedPrimaryRole };
+    });
+  };
+
+  const handlePrimaryRoleChange = (newRole: UserRole) => {
+    const targetRoleId = ROLE_ID_MAP[newRole];
+    setEditingUser(prev => {
+      if (!prev) return null;
+      const currentRoles = prev.roles || [];
+      const updatedRoles = currentRoles.includes(targetRoleId) ? currentRoles : [targetRoleId, ...currentRoles];
+      return { ...prev, role: newRole, roles: updatedRoles };
     });
   };
 
@@ -168,6 +216,7 @@ const Users: React.FC<UsersProps> = ({ notify }) => {
                         const r = MOCK_ROLES.find(x => x.id === rid);
                         return <span key={rid} className="text-[9px] font-black uppercase bg-gray-100 text-gray-500 px-2 py-1 rounded">{r?.display_name || rid}</span>;
                       })}
+                      {user.roles.length === 0 && <span className="text-[9px] font-bold text-red-400 uppercase">No Roles Assigned</span>}
                     </div>
                   </td>
                   <td className="px-8 py-5">
@@ -235,6 +284,7 @@ const Users: React.FC<UsersProps> = ({ notify }) => {
                         className={`w-full bg-gray-50 border ${errors.name ? 'border-red-500 ring-2 ring-red-50' : 'border-gray-100'} rounded-2xl px-6 py-4 font-bold outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all text-gray-900`}
                         placeholder="Elena Rodriguez"
                       />
+                      {errors.name && <p className="text-red-500 text-[10px] font-black mt-2 uppercase">{errors.name[0]}</p>}
                     </div>
                     <div className="col-span-2">
                       <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Corporate Email</label>
@@ -246,19 +296,22 @@ const Users: React.FC<UsersProps> = ({ notify }) => {
                         className={`w-full bg-gray-50 border ${errors.email ? 'border-red-500 ring-2 ring-red-50' : 'border-gray-100'} rounded-2xl px-6 py-4 font-bold outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all text-gray-900`}
                         placeholder="name@lumina.com"
                       />
+                      {errors.email && <p className="text-red-500 text-[10px] font-black mt-2 uppercase">{errors.email[0]}</p>}
                     </div>
                     <div>
-                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Primary Access Role</label>
+                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Primary Access Identity</label>
                       <select 
                         value={editingUser.role} 
-                        onChange={e => setEditingUser({...editingUser, role: e.target.value as UserRole})}
+                        onChange={e => handlePrimaryRoleChange(e.target.value as UserRole)}
                         className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 font-bold outline-none text-gray-900"
                       >
                         <option value="support">Customer Support</option>
+                        <option value="warehouse">Warehouse Ops</option>
                         <option value="manager">Operations Manager</option>
                         <option value="admin">Administrator</option>
                         <option value="super-admin">Super Administrator</option>
                       </select>
+                      <p className="text-[9px] text-indigo-400 font-bold uppercase mt-2">Setting this ensures the primary role is added to assignments.</p>
                     </div>
                   </div>
                 </div>
@@ -267,9 +320,10 @@ const Users: React.FC<UsersProps> = ({ notify }) => {
               {modalSubTab === 'roles' && (
                 <div className="max-w-3xl mx-auto space-y-8 animate-in fade-in duration-300">
                   <div className="p-8 bg-indigo-50 border border-indigo-100 rounded-[2.5rem]">
-                    <h4 className="text-indigo-900 font-black text-lg mb-2">Multi-Role Assignment</h4>
-                    <p className="text-indigo-600 text-sm font-medium">Assign multiple system roles to this user. Permissions from all selected roles will be aggregated into their access token.</p>
+                    <h4 className="text-indigo-900 font-black text-lg mb-2">Multi-Role Assignment Engine</h4>
+                    <p className="text-indigo-600 text-sm font-medium leading-relaxed">Aggregate permissions by selecting multiple functional roles. Lumina resolves the final policy matrix dynamically based on all active identifiers.</p>
                   </div>
+                  {errors.roles && <p className="text-red-500 text-[10px] font-black uppercase text-center">{errors.roles[0]}</p>}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {MOCK_ROLES.map(role => (
                       <button
@@ -283,11 +337,14 @@ const Users: React.FC<UsersProps> = ({ notify }) => {
                         }`}
                       >
                         <div className="flex justify-between items-center mb-4">
-                          <span className="text-2xl">🛡️</span>
-                          {editingUser.roles?.includes(role.id) && <span className="w-6 h-6 bg-indigo-600 text-white rounded-full flex items-center justify-center text-xs">✓</span>}
+                          <span className="text-2xl">{role.id === 'role-sa' ? '🛡️' : '🔐'}</span>
+                          {editingUser.roles?.includes(role.id) && (
+                            <span className="w-8 h-8 bg-indigo-600 text-white rounded-2xl flex items-center justify-center text-xs shadow-lg shadow-indigo-200">✓</span>
+                          )}
                         </div>
-                        <p className="font-black text-gray-900">{role.display_name}</p>
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">{role.name}</p>
+                        <p className="font-black text-gray-900 leading-tight">{role.display_name}</p>
+                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-2">{role.name}</p>
+                        <p className="text-[9px] text-indigo-400 font-black mt-3">Grant: {role.permissions.includes('*') ? 'UNLIMITED' : `${role.permissions.length} NODES`}</p>
                       </button>
                     ))}
                   </div>
@@ -299,8 +356,8 @@ const Users: React.FC<UsersProps> = ({ notify }) => {
                   <div className="p-8 bg-amber-50 border border-amber-100 rounded-[2.5rem] flex items-center gap-6">
                     <span className="text-4xl">⚡</span>
                     <div>
-                      <h4 className="text-amber-900 font-black text-lg">Explicit Security Overrides</h4>
-                      <p className="text-amber-700 text-sm font-medium">These settings will override any permissions inherited from roles. Use sparingly for exceptional access needs.</p>
+                      <h4 className="text-amber-900 font-black text-lg">Explicit Security Policy Overrides</h4>
+                      <p className="text-amber-700 text-sm font-medium">Lumina processes overrides as higher-priority nodes than inherited role permissions. Use a pulse-marker (top-right) to identify active exceptions.</p>
                     </div>
                   </div>
                   <PermissionMatrix 

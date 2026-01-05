@@ -1,4 +1,3 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 import { AIIntent, CommandResponse } from "../types";
 
@@ -142,6 +141,48 @@ export const generateSEOTags = async (productName: string, description: string) 
     return JSON.parse(response.text || '{}');
   } catch (error) {
     console.error("SEO generation failed:", error);
+    return null;
+  }
+};
+
+export const suggestPermissions = async (roleName: string): Promise<{ permissions: string[], reasoning: string } | null> => {
+  const ai = getAI();
+  const systemInstruction = `
+    You are a Security Policy Architect for an Enterprise E-commerce CMS.
+    Based on the Role Name provided, suggest a set of granular permissions following the principle of least privilege.
+    Available Modules: users, roles, products, categories, orders, customers, payments, reports, settings, content.
+    Available Actions: view, create, edit, delete, approve, export.
+    Permission format: module.action (e.g., products.view).
+    Return a JSON object.
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `Suggest permissions for a role named: "${roleName}"`,
+      config: {
+        systemInstruction,
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            permissions: {
+              type: Type.ARRAY,
+              items: { type: Type.STRING },
+              description: "List of strings in 'module.action' format"
+            },
+            reasoning: {
+              type: Type.STRING,
+              description: "Brief explanation of why these permissions were selected"
+            }
+          },
+          required: ["permissions", "reasoning"]
+        }
+      }
+    });
+    return JSON.parse(response.text || '{}');
+  } catch (error) {
+    console.error("Permission suggestion failed:", error);
     return null;
   }
 };

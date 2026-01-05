@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { SystemSettings, Role, ModuleType, ActionType } from '../types';
 import PermissionMatrix from '../components/PermissionMatrix';
+import { suggestPermissions } from '../services/geminiService';
 
 interface SettingsProps {
-  notify?: (message: string, type?: 'success' | 'error' | 'info') => void;
+  notify?: (message: string, type?: 'success' | 'error' | 'info' | 'loading') => string;
+  removeNotify?: (id: string) => void;
 }
 
 const MOCK_ROLES: Role[] = [
@@ -14,7 +16,7 @@ const MOCK_ROLES: Role[] = [
 
 const ACTIONS: ActionType[] = ['view', 'create', 'edit', 'delete', 'approve', 'export'];
 
-const Settings: React.FC<SettingsProps> = ({ notify }) => {
+const Settings: React.FC<SettingsProps> = ({ notify, removeNotify }) => {
   const [settings, setSettings] = useState<SystemSettings>({
     store_name: 'Lumina Premium Store',
     store_email: 'hello@luminastore.com',
@@ -28,14 +30,41 @@ const Settings: React.FC<SettingsProps> = ({ notify }) => {
     }
   });
 
-  // Fix: Renamed activeGroup to activeTab to resolve 'Cannot find name' errors in JSX
   const [activeTab, setActiveTab] = useState<'general' | 'rbac' | 'payments' | 'integration'>('general');
   const [roles, setRoles] = useState<Role[]>(MOCK_ROLES);
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAISuggesting, setIsAISuggesting] = useState(false);
   
   const [editingRole, setEditingRole] = useState<Partial<Role> | null>(null);
   const [errors, setErrors] = useState<Record<string, string[]>>({});
+
+  const handleAISuggest = async () => {
+    if (!editingRole?.display_name?.trim()) {
+      notify?.("Identity title is required for AI contextual analysis.", "error");
+      return;
+    }
+
+    setIsAISuggesting(true);
+    const loadId = notify?.(`Lumina is synthesizing security policies for "${editingRole.display_name}"...`, 'loading');
+    
+    try {
+      const result = await suggestPermissions(editingRole.display_name);
+      if (loadId && removeNotify) removeNotify(loadId);
+
+      if (result) {
+        setEditingRole(prev => ({ ...prev, permissions: result.permissions }));
+        notify?.(`Gemini has recommended ${result.permissions.length} access nodes based on role scope.`, "success");
+      } else {
+        notify?.("Unable to reach Security Orchestrator. Please try again.", "error");
+      }
+    } catch (error) {
+      if (loadId && removeNotify) removeNotify(loadId);
+      notify?.("AI Protocol Interrupted.", "error");
+    } finally {
+      setIsAISuggesting(false);
+    }
+  };
 
   const validateRole = (data: Partial<Role>): boolean => {
     const newErrors: Record<string, string[]> = {};
@@ -241,16 +270,29 @@ const Settings: React.FC<SettingsProps> = ({ notify }) => {
 
                         <div className="space-y-4">
                           <div className="flex justify-between items-end">
-                            <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest">Permission Node Matrix</h4>
-                            <div className="flex items-center gap-3 p-2 bg-gray-50 border border-gray-100 rounded-xl">
-                              <span className="text-[9px] font-black text-gray-400 uppercase">Status</span>
+                            <div className="space-y-1">
+                              <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest">Permission Node Matrix</h4>
+                              <p className="text-[10px] text-gray-400 font-bold">Configure active gateways for this security context.</p>
+                            </div>
+                            <div className="flex items-center gap-4">
                               <button 
                                 type="button"
-                                onClick={() => setEditingRole({...editingRole, is_active: !editingRole?.is_active})}
-                                className={`px-4 py-1.5 rounded-lg text-[9px] font-black transition-all ${editingRole?.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}
+                                onClick={handleAISuggest}
+                                disabled={isAISuggesting || !editingRole?.display_name}
+                                className="flex items-center gap-2 px-6 py-3 bg-indigo-50 text-indigo-600 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all disabled:opacity-40 shadow-sm"
                               >
-                                {editingRole?.is_active ? 'ACTIVE' : 'OFFLINE'}
+                                {isAISuggesting ? <><span className="w-3 h-3 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></span> Thinking...</> : <>✨ AI Suggest Policy</>}
                               </button>
+                              <div className="flex items-center gap-3 p-2 bg-gray-50 border border-gray-100 rounded-xl">
+                                <span className="text-[9px] font-black text-gray-400 uppercase">Status</span>
+                                <button 
+                                  type="button"
+                                  onClick={() => setEditingRole({...editingRole, is_active: !editingRole?.is_active})}
+                                  className={`px-4 py-1.5 rounded-lg text-[9px] font-black transition-all ${editingRole?.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}
+                                >
+                                  {editingRole?.is_active ? 'ACTIVE' : 'OFFLINE'}
+                                </button>
+                              </div>
                             </div>
                           </div>
                           {errors.permissions && <p className="text-red-500 text-[10px] font-black uppercase">{errors.permissions[0]}</p>}

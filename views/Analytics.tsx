@@ -84,7 +84,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ notify, removeNotify }) => {
 
       <div className="bg-white rounded-[3rem] border border-gray-100 shadow-sm overflow-hidden flex flex-col lg:flex-row">
         {/* Responsive Side Menu */}
-        <div className="lg:w-72 border-r border-gray-100 bg-gray-50/20 p-6 space-y-2">
+        <div className="lg:w-72 border-r border-gray-100 bg-gray-50/20 p-6 space-y-2 flex-shrink-0">
           {[
             { id: 'sales', label: 'Gross Revenue', icon: '📈' },
             { id: 'categories', label: 'Category Alpha', icon: '🏷️' },
@@ -117,25 +117,25 @@ const Analytics: React.FC<AnalyticsProps> = ({ notify, removeNotify }) => {
           </div>
         </div>
 
-        {/* Dynamic Charting Zone */}
-        <div className="flex-1 p-6 md:p-10 lg:p-16 min-h-[600px]">
+        {/* Dynamic Charting Zone - min-w-0 is critical here to prevent grid overlap in flex parents */}
+        <div className="flex-1 p-6 md:p-10 lg:p-12 min-h-[600px] min-w-0">
           {activeTab === 'sales' && (
             <div className="space-y-12 animate-in fade-in duration-500">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                <div className="p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100 hover:bg-white transition-colors cursor-default">
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Total Volume</p>
-                  <p className="text-4xl font-black text-gray-900 leading-none">$1.4M</p>
-                  <p className="text-xs text-green-600 font-black mt-3 flex items-center gap-1">↑ 12.4% <span className="opacity-40">vs prev</span></p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6 md:gap-8">
+                <div className="p-6 md:p-8 bg-gray-50 rounded-[2rem] md:rounded-[2.5rem] border border-gray-100 hover:bg-white transition-colors cursor-default min-w-0">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 truncate">Total Volume</p>
+                  <p className="text-3xl md:text-4xl font-black text-gray-900 leading-none truncate">$1.4M</p>
+                  <p className="text-xs text-green-600 font-black mt-3 flex items-center gap-1">↑ 12.4% <span className="opacity-40 font-bold whitespace-nowrap">vs prev</span></p>
                 </div>
-                <div className="p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100 hover:bg-white transition-colors cursor-default">
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Profit Net</p>
-                  <p className="text-4xl font-black text-gray-900 leading-none">$420K</p>
-                  <p className="text-xs text-indigo-600 font-black mt-3 flex items-center gap-1">↑ 8.2% <span className="opacity-40">optimized</span></p>
+                <div className="p-6 md:p-8 bg-gray-50 rounded-[2rem] md:rounded-[2.5rem] border border-gray-100 hover:bg-white transition-colors cursor-default min-w-0">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 truncate">Profit Net</p>
+                  <p className="text-3xl md:text-4xl font-black text-gray-900 leading-none truncate">$420K</p>
+                  <p className="text-xs text-indigo-600 font-black mt-3 flex items-center gap-1">↑ 8.2% <span className="opacity-40 font-bold whitespace-nowrap">optimized</span></p>
                 </div>
-                <div className="p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100 hover:bg-white transition-colors cursor-default">
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">AOV Cycle</p>
-                  <p className="text-4xl font-black text-gray-900 leading-none">$112</p>
-                  <p className="text-xs text-amber-600 font-black mt-3 flex items-center gap-1">Stable <span className="opacity-40">standard</span></p>
+                <div className="p-6 md:p-8 bg-gray-50 rounded-[2rem] md:rounded-[2.5rem] border border-gray-100 hover:bg-white transition-colors cursor-default min-w-0 sm:col-span-2 xl:col-span-1">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 truncate">AOV Cycle</p>
+                  <p className="text-3xl md:text-4xl font-black text-gray-900 leading-none truncate">$112</p>
+                  <p className="text-xs text-amber-600 font-black mt-3 flex items-center gap-1">Stable <span className="opacity-40 font-bold whitespace-nowrap">standard</span></p>
                 </div>
               </div>
 
@@ -159,7 +159,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ notify, removeNotify }) => {
 
           {activeTab === 'categories' && (
             <div className="space-y-12 animate-in fade-in duration-500">
-               <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+               <div className="grid grid-cols-1 xl:grid-cols-2 gap-10">
                  <div className="bg-gray-50 p-8 rounded-[3rem] h-[400px] border border-gray-100 shadow-inner">
                     <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-10">Revenue Spread</h4>
                     <ResponsiveContainer width="100%" height="100%">
@@ -194,11 +194,11 @@ const Analytics: React.FC<AnalyticsProps> = ({ notify, removeNotify }) => {
 
           {activeTab === 'geo' && (
             <div className="space-y-10 animate-in fade-in duration-500">
-               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+               <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4 gap-6">
                  {MOCK_GEO_DATA.map(geo => (
-                   <div key={geo.city} className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm hover:shadow-xl transition-all cursor-default group">
+                   <div key={geo.city} className="bg-white p-6 md:p-8 rounded-[2.5rem] border border-gray-100 shadow-sm hover:shadow-xl transition-all cursor-default group min-w-0">
                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 group-hover:text-indigo-600 transition-colors">{geo.region} Node</p>
-                      <h5 className="text-2xl font-black text-gray-900 tracking-tighter leading-none mb-6">{geo.city}</h5>
+                      <h5 className="text-xl md:text-2xl font-black text-gray-900 tracking-tighter leading-tight mb-6 truncate">{geo.city}</h5>
                       <div className="space-y-3 pt-6 border-t border-gray-50">
                         <div className="flex justify-between text-xs font-bold">
                           <span className="text-gray-400">Revenue:</span>
@@ -217,7 +217,7 @@ const Analytics: React.FC<AnalyticsProps> = ({ notify, removeNotify }) => {
         </div>
 
         {/* Floating Insight Panel */}
-        <div className="lg:w-80 bg-indigo-50/30 p-8 border-l border-gray-100 flex flex-col justify-between overflow-y-auto">
+        <div className="lg:w-80 bg-indigo-50/30 p-8 border-l border-gray-100 flex flex-col justify-between overflow-y-auto flex-shrink-0">
           <div className="space-y-10">
             <div>
               <h3 className="text-xl font-black text-gray-900 tracking-tighter flex items-center gap-3">

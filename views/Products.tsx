@@ -21,7 +21,8 @@ const MOCK_PRODUCTS: Product[] = [
     short_description: 'Handcrafted leather boots for the modern urban explorer.',
     images: [{ id: 'img-1', path: 'https://picsum.photos/400/400?random=10', is_primary: true, sort_order: 0 }],
     variants: [
-      { id: 'v1', sku: 'BT-001-BR-10', price: 129.99, stock_quantity: 15, attributes: { color: 'Brown', size: '10' } }
+      { id: 'v1', sku: 'BT-001-BR-10', price: 129.99, stock_quantity: 15, attributes: { color: 'Brown', size: '10' } },
+      { id: 'v2', sku: 'BT-001-BK-10', price: 129.99, stock_quantity: 8, attributes: { color: 'Black', size: '10' } }
     ]
   },
   { 
@@ -41,6 +42,14 @@ const MOCK_PRODUCTS: Product[] = [
   }
 ];
 
+const INITIAL_VARIANT_STATE: ProductVariant = {
+  id: '',
+  sku: '',
+  price: 0,
+  stock_quantity: 0,
+  attributes: {}
+};
+
 const INITIAL_FORM_STATE: Partial<Product> = {
   name: '',
   slug: '',
@@ -49,9 +58,7 @@ const INITIAL_FORM_STATE: Partial<Product> = {
   category_name: 'Footwear',
   description: '',
   short_description: '',
-  variants: [
-    { id: 'v-' + Math.random().toString(36).substr(2, 5), sku: '', price: 0, stock_quantity: 0, attributes: {} }
-  ],
+  variants: [],
   images: [],
   meta_title: '',
   meta_description: ''
@@ -62,11 +69,16 @@ const Products: React.FC<ProductsProps> = ({ notify, removeNotify }) => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
-  const [modalTab, setModalTab] = useState<'general' | 'inventory' | 'media' | 'seo'>('general');
+  const [modalTab, setModalTab] = useState<'general' | 'variants' | 'media' | 'seo'>('general');
   const [editingProduct, setEditingProduct] = useState<Partial<Product>>(INITIAL_FORM_STATE);
   const [isAIGenerating, setIsAIGenerating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Variant editing state
+  const [showVariantForm, setShowVariantForm] = useState(false);
+  const [editingVariant, setEditingVariant] = useState<ProductVariant>(INITIAL_VARIANT_STATE);
+  const [editingVariantIndex, setEditingVariantIndex] = useState<number | null>(null);
 
   // Search filter logic
   const filteredProducts = useMemo(() => {
@@ -102,8 +114,7 @@ const Products: React.FC<ProductsProps> = ({ notify, removeNotify }) => {
     const newErrors: Record<string, string> = {};
     if (!editingProduct.name?.trim()) newErrors.name = "Entity title is mandatory.";
     if (!editingProduct.slug?.trim()) newErrors.slug = "Path slug is required.";
-    if (editingProduct.meta_title && editingProduct.meta_title.length > 60) newErrors.meta_title = "Title exceeds 60 chars.";
-    if (editingProduct.meta_description && editingProduct.meta_description.length > 160) newErrors.meta_description = "Snippet exceeds 160 chars.";
+    if (editingProduct.variants?.length === 0) newErrors.variants = "At least one variant is required.";
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -148,7 +159,7 @@ const Products: React.FC<ProductsProps> = ({ notify, removeNotify }) => {
     const finalProduct = {
       ...editingProduct,
       id: editingProduct.id || Math.random().toString(36).substr(2, 9),
-      category_id: 'cat-1', // Default category for now
+      category_id: 'cat-1',
     } as Product;
 
     if (editingProduct.id) {
@@ -186,6 +197,65 @@ const Products: React.FC<ProductsProps> = ({ notify, removeNotify }) => {
         notify?.("Asset staged for sync.", "success");
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  // Variant Management Logic
+  const handleAddVariant = () => {
+    setEditingVariant({ ...INITIAL_VARIANT_STATE, id: 'temp-' + Math.random().toString(36).substr(2, 5) });
+    setEditingVariantIndex(null);
+    setShowVariantForm(true);
+  };
+
+  const handleEditVariant = (variant: ProductVariant, index: number) => {
+    setEditingVariant({ ...variant });
+    setEditingVariantIndex(index);
+    setShowVariantForm(true);
+  };
+
+  const handleSaveVariant = () => {
+    if (!editingVariant.sku) return notify?.("SKU is mandatory for variant identification.", "error");
+    
+    const newVariants = [...(editingProduct.variants || [])];
+    if (editingVariantIndex !== null) {
+      newVariants[editingVariantIndex] = editingVariant;
+    } else {
+      newVariants.push(editingVariant);
+    }
+    
+    setEditingProduct({ ...editingProduct, variants: newVariants });
+    setShowVariantForm(false);
+  };
+
+  const handleDeleteVariant = (index: number) => {
+    const newVariants = [...(editingProduct.variants || [])];
+    newVariants.splice(index, 1);
+    setEditingProduct({ ...editingProduct, variants: newVariants });
+  };
+
+  const handleAttributeChange = (key: string, value: string) => {
+    setEditingVariant(prev => ({
+      ...prev,
+      attributes: { ...prev.attributes, [key]: value }
+    }));
+  };
+
+  const removeAttribute = (key: string) => {
+    setEditingVariant(prev => {
+      const newAttrs = { ...prev.attributes };
+      delete newAttrs[key];
+      return { ...prev, attributes: newAttrs };
+    });
+  };
+
+  const [newAttrKey, setNewAttrKey] = useState('');
+  const [newAttrVal, setNewAttrVal] = useState('');
+
+  const addNewAttribute = () => {
+    if (newAttrKey && newAttrVal) {
+      handleAttributeChange(newAttrKey, newAttrVal);
+      setNewAttrKey('');
+      setNewAttrVal('');
     }
   };
 
@@ -262,17 +332,23 @@ const Products: React.FC<ProductsProps> = ({ notify, removeNotify }) => {
                       <div>
                         <p className="font-black text-gray-900 text-lg leading-tight tracking-tight">{p.name}</p>
                         <p className="text-[10px] text-indigo-600 font-black uppercase mt-2 tracking-[0.1em]">{p.brand} • {p.category_name}</p>
+                        <p className="text-[9px] text-gray-400 font-bold uppercase mt-1">{p.variants.length} Variants</p>
                       </div>
                     </div>
                   </td>
                   <td className="px-12 py-10">
                     <div className="flex flex-col">
-                      <span className="font-black text-gray-900 text-2xl tracking-tighter">${p.variants[0]?.price.toFixed(2)}</span>
-                      <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest mt-1">SKU: {p.variants[0]?.sku}</span>
+                      <span className="font-black text-gray-900 text-2xl tracking-tighter">
+                        ${p.variants[0]?.price.toFixed(2)}
+                        {p.variants.length > 1 && <span className="text-sm text-gray-400 font-medium ml-1">+</span>}
+                      </span>
+                      <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest mt-1">Master SKU: {p.variants[0]?.sku}</span>
                     </div>
                   </td>
                   <td className="px-12 py-10">
-                    <span className={`text-xl font-black ${p.variants[0]?.stock_quantity < 10 ? 'text-red-500' : 'text-gray-900'}`}>{p.variants[0]?.stock_quantity}</span>
+                    <span className={`text-xl font-black ${p.variants.reduce((acc, v) => acc + v.stock_quantity, 0) < 10 ? 'text-red-500' : 'text-gray-900'}`}>
+                      {p.variants.reduce((acc, v) => acc + v.stock_quantity, 0)}
+                    </span>
                   </td>
                   <td className="px-12 py-10">
                     <span className={`text-[9px] px-4 py-2 rounded-full font-black uppercase tracking-widest shadow-sm ${
@@ -297,7 +373,7 @@ const Products: React.FC<ProductsProps> = ({ notify, removeNotify }) => {
       {/* Initialize Product Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-gray-900/70 backdrop-blur-md z-[150] flex items-center justify-center p-4 md:p-12 overflow-y-auto">
-          <div className="bg-white rounded-[2.5rem] w-full max-w-5xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh]">
+          <div className="bg-white rounded-[2.5rem] w-full max-w-6xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh]">
             {/* Modal Head */}
             <div className="p-10 border-b border-gray-50 bg-gray-50/30 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6 flex-shrink-0">
               <div>
@@ -321,7 +397,7 @@ const Products: React.FC<ProductsProps> = ({ notify, removeNotify }) => {
             <div className="flex px-10 border-b border-gray-50 bg-white gap-8 overflow-x-auto scrollbar-hide flex-shrink-0">
               {[
                 { id: 'general', label: 'Primary Info', icon: '📝' },
-                { id: 'inventory', label: 'Economics & Stock', icon: '🏷️' },
+                { id: 'variants', label: 'Variants & Inventory', icon: '🏷️' },
                 { id: 'media', label: 'Visual Assets', icon: '📸' },
                 { id: 'seo', label: 'Search Optimization', icon: '✨' }
               ].map(tab => (
@@ -402,59 +478,188 @@ const Products: React.FC<ProductsProps> = ({ notify, removeNotify }) => {
                 </div>
               )}
 
-              {modalTab === 'inventory' && (
+              {modalTab === 'variants' && (
                 <div className="space-y-10 animate-in fade-in duration-300">
-                  <div className="p-8 bg-indigo-900 rounded-[2.5rem] text-white flex flex-col md:flex-row justify-between items-center gap-8 shadow-2xl shadow-indigo-100">
-                    <div>
-                      <h4 className="text-2xl font-black tracking-tighter mb-2">Variant Orchestration</h4>
-                      <p className="text-indigo-200 font-medium">Define price points, stock thresholds, and SKUs for the base variant.</p>
+                  <div className="flex justify-between items-center">
+                    <div className="space-y-1">
+                      <h4 className="text-2xl font-black text-gray-900 tracking-tighter">Variant Hierarchy</h4>
+                      <p className="text-gray-500 text-sm">Define SKUs for specific combinations of size, color, or other attributes.</p>
                     </div>
+                    {!showVariantForm && (
+                      <button 
+                        onClick={handleAddVariant}
+                        className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-100 hover:bg-indigo-700 active:scale-95 transition-all"
+                      >
+                        ➕ Create Variant
+                      </button>
+                    )}
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                    <div>
-                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Base SKU (Unique)</label>
-                      <input 
-                        type="text" 
-                        value={editingProduct.variants?.[0]?.sku || ''}
-                        onChange={(e) => {
-                          const variants = [...(editingProduct.variants || [])];
-                          variants[0] = { ...variants[0], sku: e.target.value };
-                          setEditingProduct({ ...editingProduct, variants });
-                        }}
-                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 font-mono font-bold text-gray-900 outline-none"
-                        placeholder="BT-001-BR-10"
-                      />
+                  {errors.variants && <p className="text-red-500 text-[10px] font-black uppercase">{errors.variants}</p>}
+
+                  {showVariantForm ? (
+                    <div className="bg-gray-50 p-10 rounded-[3rem] border border-gray-100 space-y-10 animate-in slide-in-from-top-4 duration-500">
+                      <div className="flex justify-between items-center">
+                        <h5 className="text-xl font-black text-gray-900">Variant Identity Node</h5>
+                        <button onClick={() => setShowVariantForm(false)} className="text-gray-400 hover:text-gray-900">Cancel</button>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                        <div>
+                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">SKU (Stock Keeping Unit)</label>
+                          <input 
+                            type="text" 
+                            value={editingVariant.sku}
+                            onChange={e => setEditingVariant({ ...editingVariant, sku: e.target.value })}
+                            className="w-full bg-white border border-gray-200 rounded-2xl px-6 py-4 font-mono font-bold text-indigo-600 outline-none"
+                            placeholder="BT-001-L"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Unit Price ($)</label>
+                          <input 
+                            type="number" 
+                            value={editingVariant.price || ''}
+                            onChange={e => setEditingVariant({ ...editingVariant, price: parseFloat(e.target.value) })}
+                            className="w-full bg-white border border-gray-200 rounded-2xl px-6 py-4 font-black text-gray-900 outline-none"
+                            placeholder="0.00"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Available Units</label>
+                          <input 
+                            type="number" 
+                            value={editingVariant.stock_quantity || ''}
+                            onChange={e => setEditingVariant({ ...editingVariant, stock_quantity: parseInt(e.target.value) })}
+                            className="w-full bg-white border border-gray-200 rounded-2xl px-6 py-4 font-black text-gray-900 outline-none"
+                            placeholder="0"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Shipping Weight (kg)</label>
+                          <input 
+                            type="number" 
+                            value={editingVariant.weight || ''}
+                            onChange={e => setEditingVariant({ ...editingVariant, weight: parseFloat(e.target.value) })}
+                            className="w-full bg-white border border-gray-200 rounded-2xl px-6 py-4 font-bold text-gray-500 outline-none"
+                            placeholder="0.5"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Barcode (Optional)</label>
+                          <input 
+                            type="text" 
+                            value={editingVariant.barcode || ''}
+                            onChange={e => setEditingVariant({ ...editingVariant, barcode: e.target.value })}
+                            className="w-full bg-white border border-gray-200 rounded-2xl px-6 py-4 font-mono font-bold text-gray-400 outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-6">
+                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest">Variant Attributes (Color, Size, etc.)</label>
+                        <div className="flex flex-wrap gap-3">
+                          {Object.entries(editingVariant.attributes).map(([k, v]) => (
+                            <div key={k} className="flex items-center gap-2 bg-indigo-50 text-indigo-600 px-4 py-2 rounded-xl border border-indigo-100 group">
+                              <span className="text-[10px] font-black uppercase">{k}:</span>
+                              <span className="text-xs font-bold">{v}</span>
+                              <button onClick={() => removeAttribute(k)} className="ml-2 text-indigo-300 hover:text-indigo-600">✕</button>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex gap-3 max-w-xl">
+                          <input 
+                            type="text" 
+                            placeholder="Key (e.g. Size)" 
+                            value={newAttrKey}
+                            onChange={e => setNewAttrKey(e.target.value)}
+                            className="flex-1 bg-white border border-gray-200 rounded-xl px-4 py-2 text-xs font-bold"
+                          />
+                          <input 
+                            type="text" 
+                            placeholder="Value (e.g. XL)" 
+                            value={newAttrVal}
+                            onChange={e => setNewAttrVal(e.target.value)}
+                            className="flex-1 bg-white border border-gray-200 rounded-xl px-4 py-2 text-xs font-bold"
+                          />
+                          <button 
+                            type="button"
+                            onClick={addNewAttribute}
+                            className="px-6 py-2 bg-white border border-indigo-600 text-indigo-600 rounded-xl text-[10px] font-black uppercase hover:bg-indigo-600 hover:text-white transition-all"
+                          >
+                            Add
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-4">
+                        <button 
+                          type="button" 
+                          onClick={handleSaveVariant}
+                          className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl shadow-indigo-100"
+                        >
+                          Commit Variant
+                        </button>
+                        <button 
+                          type="button" 
+                          onClick={() => setShowVariantForm(false)}
+                          className="px-10 py-4 bg-white text-gray-400 rounded-2xl font-black text-[10px] uppercase tracking-widest"
+                        >
+                          Discard
+                        </button>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Retail Price ($)</label>
-                      <input 
-                        type="number" 
-                        value={editingProduct.variants?.[0]?.price || ''}
-                        onChange={(e) => {
-                          const variants = [...(editingProduct.variants || [])];
-                          variants[0] = { ...variants[0], price: parseFloat(e.target.value) };
-                          setEditingProduct({ ...editingProduct, variants });
-                        }}
-                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 font-black text-gray-900 outline-none"
-                        placeholder="0.00"
-                      />
+                  ) : (
+                    <div className="border border-gray-100 rounded-[2.5rem] overflow-hidden bg-white shadow-sm">
+                      <table className="w-full text-left">
+                        <thead className="bg-gray-50/50 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">
+                          <tr>
+                            <th className="px-10 py-6">SKU / Attributes</th>
+                            <th className="px-10 py-6 text-center">Price</th>
+                            <th className="px-10 py-6 text-center">Stock</th>
+                            <th className="px-10 py-6 text-right">Gateways</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                          {(editingProduct.variants || []).map((v, idx) => (
+                            <tr key={idx} className="hover:bg-gray-50/30 transition-all">
+                              <td className="px-10 py-6">
+                                <p className="font-black text-gray-900 text-sm mb-2">{v.sku}</p>
+                                <div className="flex gap-2">
+                                  {Object.entries(v.attributes).map(([ak, av]) => (
+                                    <span key={ak} className="text-[9px] font-black uppercase bg-gray-100 text-gray-500 px-2 py-0.5 rounded-md">
+                                      {ak}: {av}
+                                    </span>
+                                  ))}
+                                </div>
+                              </td>
+                              <td className="px-10 py-6 text-center font-black text-gray-900 text-lg">
+                                ${v.price.toFixed(2)}
+                              </td>
+                              <td className="px-10 py-6 text-center">
+                                <span className={`text-sm font-black ${v.stock_quantity < 5 ? 'text-red-500' : 'text-gray-900'}`}>
+                                  {v.stock_quantity} units
+                                </span>
+                              </td>
+                              <td className="px-10 py-6 text-right">
+                                <div className="flex justify-end gap-2">
+                                  <button onClick={() => handleEditVariant(v, idx)} className="w-10 h-10 flex items-center justify-center bg-gray-50 text-indigo-600 rounded-xl hover:bg-indigo-600 hover:text-white transition-all">✏️</button>
+                                  <button onClick={() => handleDeleteVariant(idx)} className="w-10 h-10 flex items-center justify-center bg-gray-50 text-red-500 rounded-xl hover:bg-red-500 hover:text-white transition-all">🗑️</button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                          {(editingProduct.variants?.length || 0) === 0 && (
+                            <tr>
+                              <td colSpan={4} className="px-10 py-20 text-center text-gray-400 font-medium italic">
+                                No variations configured. Product is currently unsellable.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
                     </div>
-                    <div>
-                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Current Stock Level</label>
-                      <input 
-                        type="number" 
-                        value={editingProduct.variants?.[0]?.stock_quantity || ''}
-                        onChange={(e) => {
-                          const variants = [...(editingProduct.variants || [])];
-                          variants[0] = { ...variants[0], stock_quantity: parseInt(e.target.value) };
-                          setEditingProduct({ ...editingProduct, variants });
-                        }}
-                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 font-black text-gray-900 outline-none"
-                        placeholder="0"
-                      />
-                    </div>
-                  </div>
+                  )}
                 </div>
               )}
 

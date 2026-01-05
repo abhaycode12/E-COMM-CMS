@@ -15,14 +15,14 @@ Schema::create('categories', function (Blueprint $table) {
     $table->boolean('is_active')->default(true);
     
     // SEO Fields
-    $table->string('meta_title')->nullable();
-    $table->string('meta_description')->nullable();
+    $table->string('meta_title', 60)->nullable();
+    $table->string('meta_description', 160)->nullable();
     
     $table->integer('sort_order')->default(0);
     $table->timestamps();
 
     $table->foreign('parent_id')->references('id')->on('categories')->onDelete('set null');
-    $table->index(['is_active', 'parent_id']);
+    $table->index(['is_active', 'parent_id', 'sort_order']);
 });
 ```
 
@@ -45,6 +45,7 @@ class Category extends Model
 
     protected $casts = [
         'is_active' => 'boolean',
+        'sort_order' => 'integer',
     ];
 
     public function parent(): BelongsTo {
@@ -65,6 +66,13 @@ class Category extends Model
     public function scopeRoots($query) {
         return $query->whereNull('parent_id');
     }
+    
+    /**
+     * Scope for active storefront categories
+     */
+    public function scopeActive($query) {
+        return $query->where('is_active', true);
+    }
 }
 ```
 
@@ -78,12 +86,13 @@ use App\Models\Category;
 use App\Http\Requests\V1\CategoryRequest;
 use App\Http\Resources\V1\CategoryResource;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support - Facades\Storage;
 
 class CategoryController extends Controller
 {
     public function index(): JsonResponse
     {
-        // Fetch categories with product counts (eager loading)
+        // Fetch categories with product counts and order
         $categories = Category::withCount('products')->orderBy('sort_order')->get();
         return response()->json(CategoryResource::collection($categories));
     }
@@ -92,29 +101,63 @@ class CategoryController extends Controller
     {
         // Recursive tree structure for the UI
         $tree = Category::roots()->with(['children' => function($q) {
-            $q->withCount('products');
-        }])->withCount('products')->get();
+            $q->withCount('products')->orderBy('sort_order');
+        }])->withCount('products')->orderBy('sort_order')->get();
         
         return response()->json(CategoryResource::collection($tree));
     }
 
     public function store(CategoryRequest $request): CategoryResource
     {
-        $category = Category::create($request->validated());
+        $data = $request->validated();
+        
+        if ($request->hasFile('image')) {
+            $data['image_path'] = $request->file('image')->store('categories', 'public');
+        }
+        
+        $category = Category::create($data);
         return new CategoryResource($category);
     }
 
     public function update(CategoryRequest $request, Category $category): CategoryResource
     {
-        $category->update($request->validated());
+        $data = $request->validated();
+
+        if ($request->hasFile('image')) {
+            // Delete old image if exists
+            if ($category->image_path) {
+                Storage::disk('public')->delete($category->image_path);
+            }
+            $data['image_path'] = $request->file('image')->store('categories', 'public');
+        }
+
+        $category->update($data);
         return new CategoryResource($category);
+    }
+
+    public function reorder(Request $request): JsonResponse
+    {
+        $order = $request->input('order'); // array of IDs
+        foreach($order as $index => $id) {
+            Category::where('id', $id)->update(['sort_order' => $index]);
+        }
+        return response()->json(['message' => 'Hierarchy reordered.']);
+    }
+
+    public function toggleStatus(Category $category): JsonResponse
+    {
+        $category->update(['is_active' => !$category->is_active]);
+        return response()->json(['message' => 'Visibility updated.', 'is_active' => $category->is_active]);
     }
 
     public function destroy(Category $category): JsonResponse
     {
-        // Business Rule: Ensure we don't leave orphaned children or products
         if ($category->children()->exists()) {
             return response()->json(['message' => 'Cannot delete category with sub-categories.'], 422);
+        }
+        
+        if ($category->image_path) {
+            Storage::disk('public')->delete($category->image_path);
         }
         
         $category->delete();
@@ -123,11 +166,17 @@ class CategoryController extends Controller
 }
 ```
 
-## 4. API Routes
-`routes/api.php`
+## 4. Category Validation (SEO & Logic)
+`app/Http/Requests/V1/CategoryRequest.php`
 ```php
-Route::prefix('v1')->middleware(['auth:sanctum'])->group(function () {
-    Route::get('categories/tree', [CategoryController::class, 'tree']);
-    Route::apiResource('categories', CategoryController::class);
-});
+return [
+    'name' => 'required|string|max:255',
+    'slug' => 'required|string|lowercase|unique:categories,slug,' . $this->id . '|regex:/^[a-z0-9-]+$/',
+    'parent_id' => 'nullable|exists:categories,id',
+    'description' => 'nullable|string',
+    'meta_title' => 'nullable|string|max:60',
+    'meta_description' => 'nullable|string|max:160',
+    'is_active' => 'boolean',
+    'image' => 'nullable|image|mimes:jpeg,png,webp|max:2048', // 2MB max
+];
 ```

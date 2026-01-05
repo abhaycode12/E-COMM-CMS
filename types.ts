@@ -346,6 +346,7 @@ export interface Category {
   meta_title?: string;
   meta_description?: string;
   product_count: number;
+  sort_order: number;
   children?: Category[];
 }
 

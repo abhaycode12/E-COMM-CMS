@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import StatCard from '../components/StatCard';
+import OptimizedImage from '../components/OptimizedImage';
 import { analyzeSalesTrends } from '../services/geminiService';
 
 const salesData = [
@@ -109,7 +110,14 @@ const Dashboard: React.FC = () => {
             {[1, 2, 3, 4].map(i => (
               <div key={i} className="flex items-center justify-between p-5 border border-gray-50 rounded-[2rem] hover:bg-gray-50 cursor-pointer transition-all group">
                 <div className="flex items-center gap-5">
-                  <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center font-black group-hover:bg-indigo-600 group-hover:text-white transition-colors">#ORD</div>
+                  <div className="w-12 h-12 relative">
+                    <OptimizedImage 
+                      src={`https://picsum.photos/48/48?random=${i + 100}`} 
+                      alt={`Order Manifest ${i}`}
+                      className="rounded-2xl"
+                    />
+                    <div className="absolute inset-0 bg-indigo-600/10 rounded-2xl group-hover:bg-indigo-600/0 transition-colors"></div>
+                  </div>
                   <div>
                     <p className="font-black text-gray-900 leading-tight text-sm">Order #32{i}1</p>
                     <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">Sarah Jenkins • 2 mins ago</p>

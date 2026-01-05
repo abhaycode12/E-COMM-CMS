@@ -1,11 +1,15 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { 
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  BarChart, Bar, PieChart, Pie, Cell, Legend, ComposedChart, Line
+  XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
+  BarChart, Bar, PieChart, Pie, Cell, Legend, ComposedChart, Line, Area
 } from 'recharts';
 import { SalesAnalyticsItem, CategorySalesPerformance, GeographicPerformance, TaxReportLine } from '../types';
 import { analyzeSalesTrends } from '../services/geminiService';
+
+interface AnalyticsProps {
+  notify?: (message: string, type?: 'success' | 'error' | 'info' | 'loading') => string;
+  removeNotify?: (id: string) => void;
+}
 
 const MOCK_SALES_TIME_SERIES: SalesAnalyticsItem[] = [
   { date: '2025-02-10', revenue: 4500, orders: 42, aov: 107, profit: 1200 },
@@ -21,7 +25,7 @@ const MOCK_CATEGORY_PERFORMANCE: CategorySalesPerformance[] = [
   { category: 'Footwear', revenue: 45000, units: 350, margin: 28 },
   { category: 'Apparel', revenue: 32000, units: 1200, margin: 42 },
   { category: 'Electronics', revenue: 85000, units: 180, margin: 15 },
-  { category: 'Home & Kitchen', revenue: 12000, units: 450, margin: 35 },
+  { category: 'Accessories', revenue: 12000, units: 450, margin: 35 },
 ];
 
 const MOCK_GEO_DATA: GeographicPerformance[] = [
@@ -31,17 +35,11 @@ const MOCK_GEO_DATA: GeographicPerformance[] = [
   { region: 'South', city: 'Houston', orders: 112, revenue: 12400 },
 ];
 
-const MOCK_TAX_DATA: TaxReportLine[] = [
-  { hsn: '6403', taxable_value: 125000, gst_rate: 12, igst: 8000, cgst: 3500, sgst: 3500, total_tax: 15000 },
-  { hsn: '6109', taxable_value: 85000, gst_rate: 5, igst: 2250, cgst: 1000, sgst: 1000, total_tax: 4250 },
-  { hsn: '8517', taxable_value: 450000, gst_rate: 18, igst: 41000, cgst: 20000, sgst: 20000, total_tax: 81000 },
-];
-
 const COLORS = ['#4f46e5', '#818cf8', '#c7d2fe', '#e0e7ff', '#6366f1'];
 
-const Analytics: React.FC = () => {
+const Analytics: React.FC<AnalyticsProps> = ({ notify, removeNotify }) => {
   const [activeTab, setActiveTab] = useState<'sales' | 'categories' | 'geo' | 'financials'>('sales');
-  const [aiInsights, setAiInsights] = useState<string>('Crunching datasets for strategic insights...');
+  const [aiInsights, setAiInsights] = useState<string>('Synthesizing regional performance metrics...');
   const [isGenerating, setIsGenerating] = useState(false);
 
   useEffect(() => {
@@ -52,51 +50,52 @@ const Analytics: React.FC = () => {
     setIsGenerating(true);
     const dataForAI = activeTab === 'sales' ? MOCK_SALES_TIME_SERIES : 
                      activeTab === 'categories' ? MOCK_CATEGORY_PERFORMANCE :
-                     activeTab === 'geo' ? MOCK_GEO_DATA : MOCK_TAX_DATA;
+                     activeTab === 'geo' ? MOCK_GEO_DATA : [];
                      
-    const insights = await analyzeSalesTrends({ tab: activeTab, metrics: dataForAI });
-    setAiInsights(insights || 'No automated insights for this segment.');
+    const insights = await analyzeSalesTrends({ segment: activeTab, data: dataForAI });
+    setAiInsights(insights || 'Deep learning analysis currently offline.');
     setIsGenerating(false);
   };
 
-  const handleExport = (format: 'pdf' | 'csv' | 'excel') => {
-    alert(`Initializing ${format.toUpperCase()} generation job... You will be notified when the report is ready for download.`);
+  const handleExport = (format: 'pdf' | 'excel' | 'csv') => {
+    const loadId = notify?.(`Compiling ${format.toUpperCase()} business report...`, 'loading');
+    setTimeout(() => {
+      if (loadId && removeNotify) removeNotify(loadId);
+      notify?.(`Report job successful. File dispatched for download.`, 'success');
+    }, 2000);
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500">
-      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-end bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm gap-4">
+    <div className="space-y-10 animate-in fade-in duration-500">
+      <header className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6 bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm relative overflow-hidden">
         <div>
-          <h2 className="text-3xl font-black text-gray-900 tracking-tighter">Business Intelligence</h2>
-          <p className="text-gray-500 mt-1">Holistic analysis across sales, operations, and compliance.</p>
+          <h2 className="text-4xl font-black text-gray-900 tracking-tighter">Business Intelligence</h2>
+          <p className="text-gray-500 mt-2 font-medium">Holistic real-time analysis across sales, regional trends, and compliance.</p>
         </div>
-        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
-          <button onClick={() => handleExport('pdf')} className="flex-1 sm:flex-none px-6 py-3 border border-gray-200 text-gray-600 rounded-2xl font-bold hover:bg-gray-50 transition-all flex items-center justify-center gap-2">
+        <div className="flex flex-wrap gap-4 w-full lg:w-auto relative z-10">
+          <button onClick={() => handleExport('pdf')} className="flex-1 lg:flex-none px-8 py-4 bg-gray-50 text-gray-700 rounded-[1.5rem] font-black text-[10px] uppercase tracking-widest hover:bg-gray-100 transition-all border border-gray-100 flex items-center justify-center gap-3">
             <span>📄</span> PDF
           </button>
-          <button onClick={() => handleExport('excel')} className="flex-1 sm:flex-none px-6 py-3 border border-gray-200 text-gray-600 rounded-2xl font-bold hover:bg-gray-50 transition-all flex items-center justify-center gap-2">
+          <button onClick={() => handleExport('excel')} className="flex-1 lg:flex-none px-8 py-4 bg-gray-50 text-gray-700 rounded-[1.5rem] font-black text-[10px] uppercase tracking-widest hover:bg-gray-100 transition-all border border-gray-100 flex items-center justify-center gap-3">
             <span>📊</span> Excel
-          </button>
-          <button onClick={() => handleExport('csv')} className="flex-1 sm:flex-none px-6 py-3 border border-gray-200 text-gray-600 rounded-2xl font-bold hover:bg-gray-50 transition-all flex items-center justify-center gap-2">
-            <span>📝</span> CSV
           </button>
         </div>
       </header>
 
-      {/* Navigation Matrix */}
-      <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden flex flex-col md:flex-row">
-        <div className="md:w-64 border-r border-gray-100 bg-gray-50/30 p-4 space-y-1">
+      <div className="bg-white rounded-[3rem] border border-gray-100 shadow-sm overflow-hidden flex flex-col lg:flex-row">
+        {/* Responsive Side Menu */}
+        <div className="lg:w-72 border-r border-gray-100 bg-gray-50/20 p-6 space-y-2">
           {[
-            { id: 'sales', label: 'Revenue & Volume', icon: '📈' },
-            { id: 'categories', label: 'Product & Margin', icon: '🏷️' },
-            { id: 'geo', label: 'Regional Trends', icon: '🌍' },
+            { id: 'sales', label: 'Gross Revenue', icon: '📈' },
+            { id: 'categories', label: 'Category Alpha', icon: '🏷️' },
+            { id: 'geo', label: 'Regional Demand', icon: '🌍' },
             { id: 'financials', label: 'Tax & Compliance', icon: '⚖️' },
           ].map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`w-full text-left px-5 py-4 rounded-2xl text-sm font-black transition-all flex items-center gap-3 ${
-                activeTab === tab.id ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'text-gray-400 hover:bg-white hover:text-gray-600'
+              className={`w-full text-left px-6 py-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all flex items-center gap-4 ${
+                activeTab === tab.id ? 'bg-indigo-600 text-white shadow-2xl shadow-indigo-100 scale-[1.02]' : 'text-gray-400 hover:bg-white hover:text-gray-600'
               }`}
             >
               <span className="text-xl">{tab.icon}</span>
@@ -104,239 +103,137 @@ const Analytics: React.FC = () => {
             </button>
           ))}
           
-          <div className="mt-8 p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100/50">
-            <h5 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-2">AI Advisor</h5>
-            <p className="text-[11px] text-indigo-400 font-medium leading-relaxed">Gemini is actively monitoring your performance metrics.</p>
+          <div className="mt-10 p-6 bg-indigo-900 rounded-[2rem] text-white shadow-2xl shadow-indigo-100 relative overflow-hidden group">
+            <h5 className="text-[10px] font-black uppercase tracking-widest mb-3 opacity-60">Lumina AI Agent</h5>
+            <p className="text-[11px] font-bold leading-relaxed mb-6 group-hover:text-indigo-200 transition-colors">Gemini is crunching your performance matrix...</p>
             <button 
               onClick={handleRefreshInsights}
               disabled={isGenerating}
-              className="mt-3 w-full py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black hover:bg-indigo-700 disabled:opacity-50"
+              className="w-full py-3 bg-white text-indigo-900 rounded-xl text-[10px] font-black uppercase tracking-widest hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
             >
-              {isGenerating ? 'Refreshing...' : 'Re-Analyze Dataset'}
+              {isGenerating ? 'Analyzing...' : 'Refresh Intel'}
             </button>
+            <div className="absolute -right-6 -bottom-6 w-24 h-24 bg-white/10 rounded-full blur-2xl"></div>
           </div>
         </div>
 
-        <div className="flex-1 p-8 min-h-[700px]">
-          {/* Tab Content: Sales Performance */}
+        {/* Dynamic Charting Zone */}
+        <div className="flex-1 p-6 md:p-10 lg:p-16 min-h-[600px]">
           {activeTab === 'sales' && (
-            <div className="space-y-10 animate-in fade-in duration-500">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100">
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Aggregate Revenue</p>
-                  <p className="text-4xl font-black text-gray-900">$1,420,500</p>
-                  <p className="text-xs text-green-600 font-bold mt-2">↑ 12.4% vs last period</p>
+            <div className="space-y-12 animate-in fade-in duration-500">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div className="p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100 hover:bg-white transition-colors cursor-default">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Total Volume</p>
+                  <p className="text-4xl font-black text-gray-900 leading-none">$1.4M</p>
+                  <p className="text-xs text-green-600 font-black mt-3 flex items-center gap-1">↑ 12.4% <span className="opacity-40">vs prev</span></p>
                 </div>
-                <div className="p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100">
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Mean Order Value</p>
-                  <p className="text-4xl font-black text-gray-900">$112.40</p>
-                  <p className="text-xs text-indigo-600 font-bold mt-2">Consistent across channels</p>
+                <div className="p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100 hover:bg-white transition-colors cursor-default">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Profit Net</p>
+                  <p className="text-4xl font-black text-gray-900 leading-none">$420K</p>
+                  <p className="text-xs text-indigo-600 font-black mt-3 flex items-center gap-1">↑ 8.2% <span className="opacity-40">optimized</span></p>
                 </div>
-                <div className="p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100">
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Gross Net Margin</p>
-                  <p className="text-4xl font-black text-gray-900">32.8%</p>
-                  <p className="text-xs text-amber-600 font-bold mt-2">Optimization recommended</p>
+                <div className="p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100 hover:bg-white transition-colors cursor-default">
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">AOV Cycle</p>
+                  <p className="text-4xl font-black text-gray-900 leading-none">$112</p>
+                  <p className="text-xs text-amber-600 font-black mt-3 flex items-center gap-1">Stable <span className="opacity-40">standard</span></p>
                 </div>
               </div>
 
-              <div className="bg-white p-8 rounded-[3rem] border border-gray-50 shadow-sm h-[450px]">
-                <h4 className="text-lg font-black text-gray-900 mb-8">Revenue & Profit Trajectory</h4>
+              <div className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm h-[400px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={MOCK_SALES_TIME_SERIES}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 'bold'}} />
-                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 'bold'}} />
+                    <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 'black'}} />
+                    <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 'black'}} />
                     <Tooltip 
-                      contentStyle={{ borderRadius: '24px', border: 'none', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)' }}
-                      cursor={{stroke: '#4f46e5', strokeWidth: 2}}
+                      contentStyle={{ borderRadius: '24px', border: 'none', boxShadow: '0 25px 50px -12px rgb(0 0 0 / 0.15)' }}
                     />
                     <Area type="monotone" dataKey="revenue" fill="#4f46e5" fillOpacity={0.05} stroke="none" />
-                    <Bar dataKey="revenue" fill="#4f46e5" radius={[10, 10, 0, 0]} barSize={40} />
-                    <Line type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={3} dot={{r: 4, fill: '#10b981'}} />
+                    <Bar dataKey="revenue" fill="#4f46e5" radius={[12, 12, 0, 0]} barSize={40} />
+                    <Line type="monotone" dataKey="profit" stroke="#10b981" strokeWidth={4} dot={{r: 6, fill: '#10b981', stroke: '#fff', strokeWidth: 3}} />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
             </div>
           )}
 
-          {/* Tab Content: Category Performance */}
           {activeTab === 'categories' && (
-            <div className="space-y-10 animate-in fade-in duration-500">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div className="bg-white p-8 rounded-[3rem] border border-gray-50 shadow-sm h-[400px]">
-                  <h4 className="text-lg font-black text-gray-900 mb-8">Category Revenue Distribution</h4>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie
-                        data={MOCK_CATEGORY_PERFORMANCE}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={100}
-                        paddingAngle={8}
-                        dataKey="revenue"
-                        nameKey="category"
-                      >
-                        {MOCK_CATEGORY_PERFORMANCE.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                      <Legend verticalAlign="bottom" height={36} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-
-                <div className="bg-white p-8 rounded-[3rem] border border-gray-50 shadow-sm h-[400px]">
-                  <h4 className="text-lg font-black text-gray-900 mb-8">Margin vs Volume Analysis</h4>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={MOCK_CATEGORY_PERFORMANCE}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                      <XAxis dataKey="category" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 'bold'}} />
-                      <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 'bold'}} />
-                      <Tooltip />
-                      <Bar dataKey="margin" name="Margin %" fill="#818cf8" radius={[8, 8, 8, 8]} barSize={30} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              <div className="border border-gray-100 rounded-[2.5rem] overflow-hidden bg-white">
-                 <table className="w-full text-left">
-                   <thead className="bg-gray-50 text-[10px] uppercase font-black tracking-widest text-gray-400">
-                     <tr>
-                       <th className="px-8 py-5">Category Name</th>
-                       <th className="px-8 py-5">Total Revenue</th>
-                       <th className="px-8 py-5">Volume Sold</th>
-                       <th className="px-8 py-5">Operating Margin</th>
-                     </tr>
-                   </thead>
-                   <tbody className="divide-y divide-gray-50">
-                     {MOCK_CATEGORY_PERFORMANCE.map(cat => (
-                       <tr key={cat.category} className="hover:bg-gray-50/50">
-                         <td className="px-8 py-5 font-black text-gray-900">{cat.category}</td>
-                         <td className="px-8 py-5 font-bold text-gray-700">${cat.revenue.toLocaleString()}</td>
-                         <td className="px-8 py-5 text-gray-500 font-medium">{cat.units.toLocaleString()} units</td>
-                         <td className="px-8 py-5">
-                            <span className={`text-xs font-black px-3 py-1 rounded-full ${cat.margin > 30 ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>
-                              {cat.margin}%
-                            </span>
-                         </td>
-                       </tr>
-                     ))}
-                   </tbody>
-                 </table>
-              </div>
+            <div className="space-y-12 animate-in fade-in duration-500">
+               <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                 <div className="bg-gray-50 p-8 rounded-[3rem] h-[400px] border border-gray-100 shadow-inner">
+                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-10">Revenue Spread</h4>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={MOCK_CATEGORY_PERFORMANCE}
+                          cx="50%" cy="50%" innerRadius={70} outerRadius={110} paddingAngle={8}
+                          dataKey="revenue" nameKey="category"
+                        >
+                          {MOCK_CATEGORY_PERFORMANCE.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                        </Pie>
+                        <Tooltip />
+                        <Legend verticalAlign="bottom" height={36} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                 </div>
+                 <div className="bg-white p-8 rounded-[3rem] h-[400px] border border-gray-100 shadow-sm">
+                    <h4 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-10">Operational Margin %</h4>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={MOCK_CATEGORY_PERFORMANCE}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                        <XAxis dataKey="category" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 'black'}} />
+                        <YAxis axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 'black'}} />
+                        <Tooltip />
+                        <Bar dataKey="margin" fill="#818cf8" radius={[12, 12, 12, 12]} barSize={25} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                 </div>
+               </div>
             </div>
           )}
 
-          {/* Tab Content: Geographic Performance */}
           {activeTab === 'geo' && (
-            <div className="space-y-8 animate-in fade-in duration-500">
-               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="space-y-10 animate-in fade-in duration-500">
+               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                  {MOCK_GEO_DATA.map(geo => (
-                   <div key={geo.city} className="bg-gray-50 p-6 rounded-[2rem] border border-gray-100">
-                     <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">{geo.region} Division</p>
-                     <h5 className="text-xl font-black text-gray-900 mb-3">{geo.city}</h5>
-                     <div className="space-y-2 pt-3 border-t border-gray-200/50">
-                       <div className="flex justify-between text-xs">
-                         <span className="text-gray-400">Revenue:</span>
-                         <span className="text-gray-900 font-black">${geo.revenue.toLocaleString()}</span>
-                       </div>
-                       <div className="flex justify-between text-xs">
-                         <span className="text-gray-400">Demand:</span>
-                         <span className="text-indigo-600 font-black">{geo.orders} orders</span>
-                       </div>
-                     </div>
+                   <div key={geo.city} className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm hover:shadow-xl transition-all cursor-default group">
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 group-hover:text-indigo-600 transition-colors">{geo.region} Node</p>
+                      <h5 className="text-2xl font-black text-gray-900 tracking-tighter leading-none mb-6">{geo.city}</h5>
+                      <div className="space-y-3 pt-6 border-t border-gray-50">
+                        <div className="flex justify-between text-xs font-bold">
+                          <span className="text-gray-400">Revenue:</span>
+                          <span className="text-gray-900">${geo.revenue.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between text-xs font-bold">
+                          <span className="text-gray-400">Units:</span>
+                          <span className="text-indigo-600">{geo.orders}</span>
+                        </div>
+                      </div>
                    </div>
                  ))}
                </div>
-
-               <div className="bg-white p-8 rounded-[3rem] border border-gray-50 shadow-sm h-[400px]">
-                 <h4 className="text-lg font-black text-gray-900 mb-8">Market Penetration by City</h4>
-                 <ResponsiveContainer width="100%" height="100%">
-                   <BarChart data={MOCK_GEO_DATA} layout="vertical">
-                     <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#f1f5f9" />
-                     <XAxis type="number" hide />
-                     <YAxis dataKey="city" type="category" axisLine={false} tickLine={false} tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 'bold'}} width={100} />
-                     <Tooltip />
-                     <Bar dataKey="revenue" fill="#4f46e5" radius={[0, 10, 10, 0]} barSize={25} />
-                   </BarChart>
-                 </ResponsiveContainer>
-               </div>
-            </div>
-          )}
-
-          {/* Tab Content: Financial & Tax */}
-          {activeTab === 'financials' && (
-            <div className="space-y-10 animate-in fade-in duration-500">
-              <div className="p-8 bg-amber-50 rounded-[2.5rem] border border-amber-100 flex items-center gap-8">
-                <span className="text-5xl">📝</span>
-                <div>
-                  <h4 className="text-2xl font-black text-amber-900 leading-tight">GST/VAT Settlement Summary</h4>
-                  <p className="text-amber-700 font-medium text-sm mt-1">HSN-level tax breakdown for the current financial cycle. Reconciled with gateway settlements.</p>
-                </div>
-              </div>
-
-              <div className="border border-gray-100 rounded-[2.5rem] overflow-hidden bg-white shadow-sm">
-                <table className="w-full text-left">
-                  <thead className="bg-gray-50 text-[10px] uppercase font-black tracking-widest text-gray-400">
-                    <tr>
-                      <th className="px-8 py-5">HSN Code</th>
-                      <th className="px-8 py-5">Taxable Value</th>
-                      <th className="px-8 py-5">GST Rate</th>
-                      <th className="px-8 py-5">IGST (Inter-state)</th>
-                      <th className="px-8 py-5">CGST + SGST</th>
-                      <th className="px-8 py-5 text-right">Total Tax Liability</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {MOCK_TAX_DATA.map(tax => (
-                      <tr key={tax.hsn} className="hover:bg-gray-50/50">
-                        <td className="px-8 py-5 font-black text-indigo-600">{tax.hsn}</td>
-                        <td className="px-8 py-5 font-bold text-gray-900">${tax.taxable_value.toLocaleString()}</td>
-                        <td className="px-8 py-5">
-                          <span className="text-[10px] font-black bg-gray-100 px-2 py-1 rounded">{tax.gst_rate}%</span>
-                        </td>
-                        <td className="px-8 py-5 text-gray-500 font-medium">${tax.igst.toLocaleString()}</td>
-                        <td className="px-8 py-5 text-gray-500 font-medium">${tax.cgst + tax.sgst}</td>
-                        <td className="px-8 py-5 text-right font-black text-gray-900">${tax.total_tax.toLocaleString()}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot className="bg-indigo-900 text-white">
-                    <tr>
-                      <td className="px-8 py-6 font-black uppercase tracking-widest text-[10px]">Consolidated Totals</td>
-                      <td className="px-8 py-6 font-black text-lg">${MOCK_TAX_DATA.reduce((acc, t) => acc + t.taxable_value, 0).toLocaleString()}</td>
-                      <td></td>
-                      <td></td>
-                      <td></td>
-                      <td className="px-8 py-6 text-right font-black text-lg">${MOCK_TAX_DATA.reduce((acc, t) => acc + t.total_tax, 0).toLocaleString()}</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
             </div>
           )}
         </div>
 
-        {/* Dynamic Insight Drawer (Side/Floating for wide, Stacked for small) */}
-        <div className="w-full bg-indigo-900 p-8 text-white relative overflow-hidden flex flex-col justify-between border-t md:border-t-0 md:w-80">
-          <div className="relative z-10">
-            <h3 className="text-xl font-black mb-6 flex items-center gap-3">
-              <span className="text-2xl">✨</span> Gemini AI Insights
-            </h3>
-            <div className="space-y-6 text-indigo-100 text-sm leading-relaxed whitespace-pre-line">
+        {/* Floating Insight Panel */}
+        <div className="lg:w-80 bg-indigo-50/30 p-8 border-l border-gray-100 flex flex-col justify-between overflow-y-auto">
+          <div className="space-y-10">
+            <div>
+              <h3 className="text-xl font-black text-gray-900 tracking-tighter flex items-center gap-3">
+                <span className="text-2xl">✨</span> Insights Ledger
+              </h3>
+              <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mt-2">Analysis Context: {activeTab}</p>
+            </div>
+            <div className="space-y-8 text-gray-600 text-sm font-medium leading-relaxed italic">
               {aiInsights}
             </div>
           </div>
-          <div className="mt-12 relative z-10 p-6 bg-white/5 rounded-[2rem] border border-white/10">
-             <h5 className="text-[10px] font-black uppercase tracking-widest mb-2 text-indigo-300">Action Plan</h5>
-             <p className="text-xs text-indigo-100 font-medium italic leading-relaxed">"Based on recent {activeTab} trends, we suggest adjusting seasonal stock in the {MOCK_GEO_DATA[0].city} hub to improve last-mile efficiency."</p>
+          <div className="mt-12 p-8 bg-white border border-indigo-100 rounded-[2.5rem] shadow-xl shadow-indigo-100/50">
+             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-4">Strategic recommendation</p>
+             <p className="text-xs font-black text-gray-900 leading-relaxed mb-6">"Category drift detected in {activeTab}. Shift 15% marketing budget to performance Apparel for Q2."</p>
+             <button className="text-[10px] font-black text-indigo-600 bg-indigo-50 px-6 py-2.5 rounded-xl hover:bg-indigo-600 hover:text-white transition-all w-full">Execute Strategy</button>
           </div>
-          
-          <div className="absolute top-0 right-0 -mr-20 -mt-20 w-80 h-80 bg-indigo-500 rounded-full opacity-10 blur-[100px]"></div>
-          <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 bg-purple-500 rounded-full opacity-10 blur-[100px]"></div>
         </div>
       </div>
     </div>

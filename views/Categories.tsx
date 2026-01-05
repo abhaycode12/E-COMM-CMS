@@ -3,6 +3,10 @@ import React, { useState } from 'react';
 import { Category } from '../types';
 import { generateSEOTags } from '../services/geminiService';
 
+interface CategoriesProps {
+  notify?: (message: string, type?: 'success' | 'error' | 'info') => void;
+}
+
 const MOCK_CATEGORIES: Category[] = [
   {
     id: '1',
@@ -45,7 +49,7 @@ const MOCK_CATEGORIES: Category[] = [
   }
 ];
 
-const Categories: React.FC = () => {
+const Categories: React.FC<CategoriesProps> = ({ notify }) => {
   const [categories, setCategories] = useState<Category[]>(MOCK_CATEGORIES);
   const [showModal, setShowModal] = useState(false);
   const [modalTab, setModalTab] = useState<'info' | 'media' | 'seo'>('info');
@@ -53,7 +57,10 @@ const Categories: React.FC = () => {
   const [isGeneratingSEO, setIsGeneratingSEO] = useState(false);
 
   const handleAIDesign = async () => {
-    if (!editingCategory?.name) return alert('Enter a category name first');
+    if (!editingCategory?.name) {
+      notify?.('Identify a category name first to trigger SEO analysis.', 'error');
+      return;
+    }
     setIsGeneratingSEO(true);
     const seo = await generateSEOTags(editingCategory.name, editingCategory.description || 'General category');
     if (seo) {
@@ -62,6 +69,7 @@ const Categories: React.FC = () => {
         meta_title: seo.title,
         meta_description: seo.metaDescription
       }));
+      notify?.('Metadata synthesized by Gemini.', 'success');
     }
     setIsGeneratingSEO(false);
   };
@@ -69,6 +77,7 @@ const Categories: React.FC = () => {
   const handleDelete = (id: string) => {
     if (window.confirm('Are you sure you want to delete this category? Sub-categories may be orphaned.')) {
       setCategories(prev => prev.filter(c => c.id !== id));
+      notify?.('Taxonomy node purged.', 'info');
     }
   };
 
@@ -349,6 +358,7 @@ const Categories: React.FC = () => {
                   Discard
                 </button>
                 <button 
+                  onClick={() => { notify?.('Category changes staged for production.', 'success'); setShowModal(false); }}
                   className="flex-1 sm:flex-none px-12 py-3 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all active:scale-95"
                 >
                   Save Node

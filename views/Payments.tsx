@@ -2,6 +2,11 @@
 import React, { useState, useMemo } from 'react';
 import { Payment, Refund, Settlement, PaymentMethodType } from '../types';
 
+// Add missing props interface
+interface PaymentsProps {
+  notify?: (message: string, type?: 'success' | 'error' | 'info') => void;
+}
+
 const MOCK_PAYMENTS: Payment[] = [
   { id: 'pay1', order_id: '1', order_number: 'ORD-2025-001', transaction_id: 'ch_3Nabc123', method: 'stripe', amount: 155.59, currency: 'USD', status: 'completed', captured_at: '2025-02-15 10:35 AM', created_at: '2025-02-15 10:30 AM' },
   { id: 'pay2', order_id: '2', order_number: 'ORD-2025-002', transaction_id: 'txn_987654', method: 'paypal', amount: 51.45, currency: 'USD', status: 'completed', captured_at: '2025-02-14 04:20 PM', created_at: '2025-02-14 04:15 PM' },
@@ -14,7 +19,8 @@ const MOCK_SETTLEMENTS: Settlement[] = [
   { id: 'set2', period_start: '2025-02-08', period_end: '2025-02-14', total_gross: 8900.50, total_refunds: 120.00, net_amount: 8780.50, status: 'pending' },
 ];
 
-const Payments: React.FC = () => {
+// Fix: Accept notify prop from parent
+const Payments: React.FC<PaymentsProps> = ({ notify }) => {
   const [activeTab, setActiveTab] = useState<'transactions' | 'settlements'>('transactions');
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
@@ -40,6 +46,11 @@ const Payments: React.FC = () => {
       case 'bank_transfer': return '🏦';
       default: return '💰';
     }
+  };
+
+  const handleRefund = () => {
+    notify?.(`Refund initiated for transaction ${selectedPayment?.transaction_id}`, 'success');
+    setShowRefundModal(false);
   };
 
   return (
@@ -277,6 +288,7 @@ const Payments: React.FC = () => {
                   Discard Flow
                 </button>
                 <button 
+                  onClick={handleRefund}
                   className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black hover:bg-red-700 shadow-xl shadow-red-100 transition-all active:scale-95"
                 >
                   Confirm & Execute

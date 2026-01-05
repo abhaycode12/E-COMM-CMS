@@ -2,6 +2,11 @@
 import React, { useState } from 'react';
 import { Customer, Address, CustomerNote } from '../types';
 
+// Add missing props interface
+interface CustomersProps {
+  notify?: (message: string, type?: 'success' | 'error' | 'info') => void;
+}
+
 const MOCK_CUSTOMERS: Customer[] = [
   {
     id: '1',
@@ -41,7 +46,8 @@ const MOCK_CUSTOMERS: Customer[] = [
   }
 ];
 
-const Customers: React.FC = () => {
+// Fix: Accept notify prop from parent
+const Customers: React.FC<CustomersProps> = ({ notify }) => {
   const [customers, setCustomers] = useState<Customer[]>(MOCK_CUSTOMERS);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -58,6 +64,7 @@ const Customers: React.FC = () => {
     if (selectedCustomer?.id === id) {
       setSelectedCustomer(prev => prev ? { ...prev, is_blocked: !prev.is_blocked } : null);
     }
+    notify?.(`Customer ${id} status updated.`, 'info');
   };
 
   return (

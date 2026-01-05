@@ -1,82 +1,99 @@
 
-# LuminaCommerce Auth & RBAC Implementation
+# LuminaCommerce Enterprise RBAC & Audit System
 
-## 1. Database Migrations
+## 1. Multi-Level Architecture
 
-### Users & RBAC Tables
+The system uses a 3-tier permission resolution stack:
+1. **User Overrides**: Explicit `is_allowed` (true/false) entries for a specific user.
+2. **Role Permissions**: Permissions merged from all roles assigned to the user.
+3. **Default Deny**: If no rule exists, access is prohibited.
+
+### Database Schema Expansion
+
 ```php
 Schema::create('roles', function (Blueprint $table) {
     $table->id();
-    $table->string('name')->unique(); // super-admin, admin, manager, support
+    $table->string('name')->unique();
     $table->string('display_name');
+    $table->boolean('is_active')->default(true);
     $table->timestamps();
 });
 
 Schema::create('permissions', function (Blueprint $table) {
     $table->id();
-    $table->string('name')->unique(); // products.create, orders.delete, etc.
-    $table->string('module');
+    $table->string('module'); // products, orders, etc.
+    $table->string('action'); // view, create, edit, delete, approve, export
+    $table->string('name')->unique(); // e.g., products.edit
     $table->timestamps();
 });
 
 Schema::create('role_permission', function (Blueprint $table) {
-    $table->foreignId('role_id')->constrained()->onDelete('cascade');
-    $table->foreignId('permission_id')->constrained()->onDelete('cascade');
+    $table->foreignId('role_id')->constrained();
+    $table->foreignId('permission_id')->constrained();
 });
 
-Schema::create('user_role', function (Blueprint $table) {
-    $table->foreignId('user_id')->constrained()->onDelete('cascade');
-    $table->foreignId('role_id')->constrained()->onDelete('cascade');
+Schema::create('user_permission_overrides', function (Blueprint $table) {
+    $table->foreignId('user_id')->constrained();
+    $table->foreignId('permission_id')->constrained();
+    $table->boolean('is_allowed'); // true to explicitly allow, false to explicitly block
 });
-```
 
-### Audit & History Tables
-```php
-Schema::create('login_histories', function (Blueprint $table) {
+Schema::create('audit_logs', function (Blueprint $table) {
     $table->id();
     $table->foreignId('user_id')->constrained();
+    $table->string('role_at_time');
+    $table->string('module');
+    $table->string('action');
+    $table->json('old_data')->nullable();
+    $table->json('new_data')->nullable();
     $table->string('ip_address', 45);
     $table->string('user_agent');
-    $table->timestamp('login_at');
-});
-
-Schema::create('activity_logs', function (Blueprint $table) {
-    $table->id();
-    $table->foreignId('user_id')->nullable()->constrained();
-    $table->string('action'); // created_product, updated_order
-    $table->string('model_type');
-    $table->unsignedBigInteger('model_id');
-    $table->json('payload')->nullable();
     $table->timestamps();
 });
 ```
 
-## 2. Middleware Implementation
-`app/Http/Middleware/CheckPermission.php`
+## 2. Permission Resolution Logic
+
+The merged permission set for a user is calculated as:
+
 ```php
-public function handle($request, Closure $next, $permission)
-{
-    if (!auth()->user()->hasPermissionTo($permission)) {
-        return response()->json(['message' => 'Unauthorized Action'], 403);
-    }
-    return $next($request);
+// Backend (Laravel Policy Example)
+public function check(User $user, $permissionName) {
+    // 1. Check Overrides
+    $override = $user->overrides()->where('name', $permissionName)->first();
+    if ($override) return $override->is_allowed;
+
+    // 2. Check Roles
+    return $user->roles()->whereHas('permissions', function($q) use ($permissionName) {
+        $q->where('name', $permissionName);
+    })->exists();
 }
 ```
 
-## 3. API Routes (v1)
-`routes/api.php`
-```php
-Route::prefix('v1')->group(function () {
-    Route::post('/login', [AuthController::class, 'login']);
-    
-    Route::middleware('auth:sanctum')->group(function () {
-        Route::post('/logout', [AuthController::class, 'logout']);
-        Route::get('/me', [AuthController::class, 'me']);
-        
-        // Protected Module Routes
-        Route::middleware('permission:products.view')->group(function () {
-            Route::apiResource('products', ProductController::class);
-        });
-    });
-});
+## 3. Audit Logging Strategy
+
+Every state-changing request (`POST`, `PUT`, `PATCH`, `DELETE`) must be intercepted by the `AuditMiddleware`.
+
+- **Context Capture**: Logs the `user_id`, `ip`, and the `role` they were acting as.
+- **Data Drift**: Captures the request payload (new data) and the existing model state (old data) to provide a "diff" view for Super Admins.
+- **Immutable Entry**: Audit logs cannot be deleted or edited via the CMS UI.
+
+## 4. UI Enforcement
+
+Frontend components should use a `useAuth` hook:
+
+```tsx
+const { can } = useAuth();
+
+{can('products.edit') && (
+  <button onClick={handleEdit}>Edit Product</button>
+)}
 ```
+
+## 5. Caching & Invalidation
+
+- Permissions are cached in Redis per user (`user_perms_{id}`).
+- Cache is automatically cleared whenever:
+    - A Role is updated.
+    - User roles are reassigned.
+    - A User Override is created/deleted.

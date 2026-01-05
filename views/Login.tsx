@@ -20,13 +20,16 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     // Simulating API call
     setTimeout(() => {
       if (email === 'admin@lumina.com' && password === 'password') {
+        // Fix: Added missing roles and overrides properties to satisfy User interface definition in types.ts
         onLogin({
           id: '1',
           name: 'Alex Rivera',
           email: 'admin@lumina.com',
           role: 'super-admin',
+          roles: ['role-sa'],
           avatar: 'https://picsum.photos/40/40?random=1',
-          permissions: ['*']
+          permissions: ['*'],
+          overrides: []
         });
       } else {
         setError('Invalid credentials. Please try again.');

@@ -17,6 +17,59 @@ export enum PaymentStatus {
 
 export type PaymentMethodType = 'credit_card' | 'paypal' | 'bank_transfer' | 'cod' | 'stripe';
 
+// RBAC Types
+export type ActionType = 'view' | 'create' | 'edit' | 'delete' | 'approve' | 'export';
+export type ModuleType = 'users' | 'roles' | 'products' | 'categories' | 'orders' | 'customers' | 'payments' | 'reports' | 'settings' | 'content';
+
+export interface Permission {
+  id: string;
+  module: ModuleType;
+  action: ActionType;
+  name: string;
+}
+
+export interface Role {
+  id: string;
+  name: string;
+  display_name: string;
+  is_active: boolean;
+  permissions: string[]; // Array of permission IDs
+  created_at: string;
+}
+
+export interface UserPermissionOverride {
+  permission_id: string;
+  is_allowed: boolean;
+}
+
+export interface AuditLog {
+  id: string;
+  user_id: string;
+  user_name: string;
+  role_at_time: string;
+  module: ModuleType | 'auth';
+  action: string;
+  old_data?: any;
+  new_data?: any;
+  ip_address: string;
+  user_agent: string;
+  created_at: string;
+}
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole; // Default primary role
+  roles: string[]; // Assigned Role IDs for multi-role support
+  avatar?: string;
+  permissions: string[]; // Merged permission IDs (Inherited + Overrides)
+  overrides: UserPermissionOverride[];
+  last_login?: string;
+}
+
+export type UserRole = 'super-admin' | 'admin' | 'manager' | 'support' | 'warehouse';
+
 export interface AIIntent {
   action: 'SEARCH' | 'REPORT' | 'PREDICT' | 'NAVIGATE' | 'CONTENT' | 'UNKNOWN';
   params: Record<string, any>;
@@ -120,7 +173,7 @@ export interface LogisticsReport {
   courier_name: string;
   total_shipments: number;
   avg_delivery_days: number;
-  success_rate: number; // percentage
+  success_rate: number;
   failed_delivery_count: number;
 }
 
@@ -154,18 +207,6 @@ export interface TaxReportLine {
   cgst: number;
   sgst: number;
   total_tax: number;
-}
-
-export type UserRole = 'super-admin' | 'admin' | 'manager' | 'support' | 'warehouse';
-
-export interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: UserRole;
-  avatar?: string;
-  permissions: string[];
-  last_login?: string;
 }
 
 export interface SystemSettings {

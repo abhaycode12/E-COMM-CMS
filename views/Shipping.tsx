@@ -2,6 +2,11 @@
 import React, { useState, useMemo } from 'react';
 import { Courier, Shipment, LogisticsReport } from '../types';
 
+// Add missing props interface
+interface ShippingProps {
+  notify?: (message: string, type?: 'success' | 'error' | 'info') => void;
+}
+
 const MOCK_COURIERS: Courier[] = [
   { id: 'c1', name: 'FedEx Express', code: 'fedex', is_active: true, tracking_url_template: 'https://fedex.com/track/{{tracking_number}}' },
   { id: 'c2', name: 'UPS Global', code: 'ups', is_active: true, tracking_url_template: 'https://ups.com/track/{{tracking_number}}' },
@@ -55,7 +60,8 @@ const MOCK_REPORTS: LogisticsReport[] = [
   { id: 'r2', courier_id: 'c2', courier_name: 'UPS Global', total_shipments: 320, avg_delivery_days: 3.1, success_rate: 95.5, failed_delivery_count: 14 },
 ];
 
-const Shipping: React.FC = () => {
+// Fix: Accept notify prop from parent
+const Shipping: React.FC<ShippingProps> = ({ notify }) => {
   const [activeTab, setActiveTab] = useState<'shipments' | 'couriers' | 'performance'>('shipments');
   const [searchTerm, setSearchTerm] = useState('');
   const [showCourierModal, setShowCourierModal] = useState(false);
@@ -72,6 +78,11 @@ const Shipping: React.FC = () => {
     s.shipment_number.toLowerCase().includes(searchTerm.toLowerCase()) || 
     s.tracking_number.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handleCarrierOnboard = () => {
+    notify?.('Carrier partner onboarded and API keys verified.', 'success');
+    setShowCourierModal(false);
+  };
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
@@ -376,6 +387,7 @@ const Shipping: React.FC = () => {
                   Discard
                 </button>
                 <button 
+                  onClick={handleCarrierOnboard}
                   className="flex-1 py-4 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 shadow-xl shadow-indigo-100 active:scale-95 transition-all"
                 >
                   Authorize Partner

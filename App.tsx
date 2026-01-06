@@ -91,7 +91,7 @@ const App: React.FC = () => {
       case 'payments': return <Payments {...viewProps} />;
       case 'shipping': return <Shipping {...viewProps} />;
       case 'content': return <Content {...viewProps} />;
-      case 'analytics': return <Analytics {...viewProps} />;
+      case 'analytics': return <Analytics user={user} {...viewProps} />;
       case 'users': return <Users {...viewProps} />;
       case 'settings': return <Settings {...viewProps} />;
       default: return <Dashboard {...viewProps} />;
@@ -148,12 +148,10 @@ const App: React.FC = () => {
       />
       
       {/* Mobile Backdrop */}
-      {isMobileSidebarOpen && (
-        <div 
-          className="lg:hidden fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-[90]"
-          onClick={() => setIsMobileSidebarOpen(false)}
-        />
-      )}
+      <div 
+        className={`lg:hidden fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-[90] transition-opacity duration-300 ${isMobileSidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        onClick={() => setIsMobileSidebarOpen(false)}
+      />
 
       <main className="flex-1 min-h-screen overflow-y-auto custom-scrollbar flex flex-col relative lg:ml-64 transition-all duration-300">
         <div className="max-w-[1400px] w-full mx-auto p-4 md:p-8 lg:p-12 animate-in fade-in duration-700">

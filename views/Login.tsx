@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { User } from '../types';
 
 interface LoginProps {
@@ -11,6 +11,10 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [touched, setTouched] = useState({ email: false, password: false });
+
+  // Refs for scrolling to errors
+  const emailRef = useRef<HTMLInputElement>(null);
+  const passwordRef = useRef<HTMLInputElement>(null);
 
   const emailError = useMemo(() => {
     if (!touched.email) return null;
@@ -30,7 +34,14 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isFormValid) return;
+    setTouched({ email: true, password: true });
+
+    if (!isFormValid) {
+      const firstError = emailError ? emailRef : passwordRef;
+      firstError.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      firstError.current?.focus();
+      return;
+    }
     
     setIsLoading(true);
     setError(null);
@@ -77,15 +88,16 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             <div>
               <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 ml-1">Core Identity (Email)</label>
               <input 
+                ref={emailRef}
                 type="email" 
                 required
                 value={email}
-                onBlur={() => setTouched({ ...touched, email: true })}
+                onBlur={() => setTouched(prev => ({ ...prev, email: true }))}
                 onChange={(e) => setEmail(e.target.value)}
                 className={`w-full bg-gray-50 border ${emailError ? 'border-red-500 ring-4 ring-red-50' : 'border-gray-200 focus:border-indigo-500'} rounded-2xl px-6 py-4 outline-none transition-all text-gray-900 font-bold`}
                 placeholder="abhaycode12@gmail.com"
               />
-              {emailError && <p className="text-red-500 text-[9px] font-black uppercase mt-2 ml-1">{emailError}</p>}
+              {emailError && <p className="text-red-500 text-[10px] font-black uppercase mt-3 ml-1 animate-in slide-in-from-top-1">⚠️ {emailError}</p>}
             </div>
 
             <div>
@@ -94,15 +106,16 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 <a href="#" className="text-[9px] font-black text-indigo-600 uppercase tracking-widest hover:underline">Reset Logic</a>
               </div>
               <input 
+                ref={passwordRef}
                 type="password" 
                 required
                 value={password}
-                onBlur={() => setTouched({ ...touched, password: true })}
+                onBlur={() => setTouched(prev => ({ ...prev, password: true }))}
                 onChange={(e) => setPassword(e.target.value)}
                 className={`w-full bg-gray-50 border ${passwordError ? 'border-red-500 ring-4 ring-red-50' : 'border-gray-200 focus:border-indigo-500'} rounded-2xl px-6 py-4 outline-none transition-all text-gray-900 font-bold`}
                 placeholder="••••••••"
               />
-              {passwordError && <p className="text-red-500 text-[9px] font-black uppercase mt-2 ml-1">{passwordError}</p>}
+              {passwordError && <p className="text-red-500 text-[10px] font-black uppercase mt-3 ml-1 animate-in slide-in-from-top-1">⚠️ {passwordError}</p>}
             </div>
 
             <div className="flex items-center ml-1">
@@ -112,7 +125,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
             <button 
               type="submit"
-              disabled={isLoading || !isFormValid}
+              disabled={isLoading || (touched.email && touched.password && !isFormValid)}
               className={`
                 w-full py-5 rounded-2xl font-black text-[12px] uppercase tracking-[0.2em] transition-all shadow-xl flex items-center justify-center gap-3
                 ${isFormValid 

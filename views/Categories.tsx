@@ -25,21 +25,6 @@ const MOCK_CATEGORIES: Category[] = [
       { id: '11', parent_id: '1', name: 'Smartphones', slug: 'smartphones', is_active: true, product_count: 82, sort_order: 0 },
       { id: '12', parent_id: '1', name: 'Laptops', slug: 'laptops', is_active: true, product_count: 63, sort_order: 1 },
     ]
-  },
-  {
-    id: '2',
-    name: 'Fashion',
-    slug: 'fashion',
-    is_active: true,
-    product_count: 320,
-    icon: '👕',
-    sort_order: 1,
-    description: 'Trendy clothing, luxury accessories, and premium footwear for all styles.',
-    image_path: 'https://picsum.photos/400/300?random=21',
-    children: [
-      { id: '21', parent_id: '2', name: 'Menswear', slug: 'mens', is_active: true, product_count: 180, sort_order: 0 },
-      { id: '22', parent_id: '2', name: 'Womenswear', slug: 'womens', is_active: true, product_count: 140, sort_order: 1 },
-    ]
   }
 ];
 
@@ -51,16 +36,13 @@ const Categories: React.FC<CategoriesProps> = ({ notify, removeNotify }) => {
   const [isGeneratingSEO, setIsGeneratingSEO] = useState(false);
   const [isOptimizingImage, setIsOptimizingImage] = useState(false);
   const [draggedItem, setDraggedItem] = useState<Category | null>(null);
-  const [isMobile, setIsMobile] = useState(false);
   const [touched, setTouched] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    const checkMobile = () => setIsMobile(window.innerWidth < 640);
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, []);
+  
+  // Input refs for auto-scrolling
+  const nameRef = useRef<HTMLInputElement>(null);
+  const slugRef = useRef<HTMLInputElement>(null);
+  const metaTitleRef = useRef<HTMLInputElement>(null);
+  const metaDescRef = useRef<HTMLTextAreaElement>(null);
 
   const validationErrors = useMemo(() => {
     const errs: Record<string, string> = {};
@@ -81,69 +63,27 @@ const Categories: React.FC<CategoriesProps> = ({ notify, removeNotify }) => {
 
   const isCategoryValid = Object.keys(validationErrors).length === 0;
 
-  const handleAIDesign = async () => {
-    if (!editingCategory?.name) {
-      notify?.('Identify a category name first to trigger SEO analysis.', 'error');
-      return;
-    }
-    setIsGeneratingSEO(true);
-    const seo = await generateSEOTags(editingCategory.name, editingCategory.description || 'General category');
-    if (seo) {
-      setEditingCategory(prev => ({
-        ...prev,
-        meta_title: seo.title.slice(0, 60),
-        meta_description: seo.metaDescription.slice(0, 160)
-      }));
-      notify?.('Metadata synthesized by Gemini.', 'success');
-    }
-    setIsGeneratingSEO(false);
-  };
-
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    // 1. Format Validation
-    const validTypes = ['image/jpeg', 'image/png', 'image/webp'];
-    if (!validTypes.includes(file.type)) {
-      notify?.('Invalid format. Please upload JPG, PNG, or WebP.', 'error');
-      return;
-    }
-
-    // 2. Size Validation (2MB)
-    if (file.size > 2 * 1024 * 1024) {
-      notify?.('File too large. Maximum size allowed is 2MB.', 'error');
-      return;
-    }
-
-    setIsOptimizingImage(true);
-    const loadId = notify?.('Optimizing high-res asset for web distribution...', 'loading');
-
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      // Simulate client-side optimization / server-side processing
-      setTimeout(() => {
-        setEditingCategory(prev => ({ ...prev, image_path: reader.result as string }));
-        setIsOptimizingImage(false);
-        if (loadId && removeNotify) removeNotify(loadId);
-        notify?.('Asset optimized and staged for sync.', 'success');
-      }, 1200);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleDeleteImage = () => {
-    if (window.confirm('Are you sure you want to terminate this asset link? This action cannot be undone.')) {
-      setEditingCategory(prev => ({ ...prev, image_path: undefined }));
-      notify?.('Visual asset purged from manifest.', 'info');
-    }
-  };
-
   const handleSave = () => {
     setTouched(true);
     if (!editingCategory) return;
+
     if (!isCategoryValid) {
       notify?.('Correct validation discrepancies before node synchronization.', 'error');
+      
+      // Auto-scroll logic
+      if (validationErrors.name || validationErrors.slug) {
+        setModalTab('info');
+        setTimeout(() => {
+          (validationErrors.name ? nameRef : slugRef).current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          (validationErrors.name ? nameRef : slugRef).current?.focus();
+        }, 100);
+      } else if (validationErrors.meta_title || validationErrors.meta_description) {
+        setModalTab('seo');
+        setTimeout(() => {
+          (validationErrors.meta_title ? metaTitleRef : metaDescRef).current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          (validationErrors.meta_title ? metaTitleRef : metaDescRef).current?.focus();
+        }, 100);
+      }
       return;
     }
 
@@ -170,117 +110,103 @@ const Categories: React.FC<CategoriesProps> = ({ notify, removeNotify }) => {
     }, 800);
   };
 
-  const renderCategoryRow = (cat: Category, depth: number = 0) => (
-    <React.Fragment key={cat.id}>
-      <tr 
-        draggable={depth === 0}
-        onDragStart={(e) => depth === 0 && setDraggedItem(cat)}
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => {
-          e.preventDefault();
-          if (!draggedItem || draggedItem.id === cat.id) return;
-          const newCategories = [...categories];
-          const dIdx = newCategories.findIndex(c => c.id === draggedItem.id);
-          const tIdx = newCategories.findIndex(c => c.id === cat.id);
-          if (dIdx !== -1 && tIdx !== -1) {
-            newCategories.splice(dIdx, 1);
-            newCategories.splice(tIdx, 0, draggedItem);
-            setCategories(newCategories.map((c, i) => ({ ...c, sort_order: i })));
-            notify?.('Hierarchy reordered.', 'success');
-          }
-          setDraggedItem(null);
-        }}
-        className={`hover:bg-gray-50/80 transition-colors border-b border-gray-100 group ${depth === 0 ? 'cursor-grab active:cursor-grabbing' : ''}`}
-      >
-        <td className="px-4 sm:px-8 py-5">
-          <div className="flex items-center gap-3" style={{ paddingLeft: `${depth * (isMobile ? 12 : 24)}px` }}>
-            {depth > 0 && <span className="text-gray-300 font-mono flex-shrink-0">└─</span>}
-            <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-indigo-50 text-indigo-600 rounded-xl text-xl shadow-sm border border-indigo-100 overflow-hidden relative">
-               {cat.image_path ? (
-                 <OptimizedImage src={cat.image_path} alt={cat.name} width={80} height={80} sizes="40px" />
-               ) : (
-                 <span>{cat.icon || '📁'}</span>
-               )}
-            </div>
-            <div className="min-w-0">
-              <p className="font-black text-gray-900 truncate text-sm sm:text-base leading-tight">{cat.name}</p>
-              <p className="text-[10px] text-gray-400 font-mono uppercase tracking-tighter truncate mt-0.5">/{cat.slug}</p>
-            </div>
-          </div>
-        </td>
-        <td className="px-6 py-4 hidden md:table-cell">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-bold text-gray-700">{cat.product_count}</span>
-            <span className="text-[10px] text-gray-400 font-black uppercase tracking-widest">items</span>
-          </div>
-        </td>
-        <td className="px-4 sm:px-8 py-5">
-          <button 
-            onClick={() => setCategories(prev => prev.map(c => c.id === cat.id ? { ...c, is_active: !c.is_active } : c))}
-            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${cat.is_active ? 'bg-indigo-600' : 'bg-gray-200'}`}
-          >
-            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${cat.is_active ? 'translate-x-5' : 'translate-x-0'}`} />
-          </button>
-        </td>
-        <td className="px-4 sm:px-8 py-5 text-right">
-          <div className="flex justify-end gap-1 sm:gap-3 lg:opacity-0 lg:group-hover:opacity-100 transition-opacity">
-            <button onClick={() => { setEditingCategory(cat); setTouched(false); setShowModal(true); setModalTab('info'); }} className="p-3 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all">✏️</button>
-            <button onClick={() => { if(window.confirm('Delete category?')) setCategories(prev => prev.filter(c => c.id !== cat.id)); }} className="p-3 text-red-600 hover:bg-red-50 rounded-xl transition-all">🗑️</button>
-          </div>
-        </td>
-      </tr>
-      {cat.children?.map(child => renderCategoryRow(child, depth + 1))}
-    </React.Fragment>
-  );
+  const handleAIDesign = async () => {
+    if (!editingCategory?.name) {
+      notify?.('Identify a category name first to trigger SEO analysis.', 'error');
+      return;
+    }
+    setIsGeneratingSEO(true);
+    const seo = await generateSEOTags(editingCategory.name, editingCategory.description || 'General category');
+    if (seo) {
+      setEditingCategory(prev => ({
+        ...prev,
+        meta_title: seo.title.slice(0, 60),
+        meta_description: seo.metaDescription.slice(0, 160)
+      }));
+      notify?.('Metadata synthesized by Gemini.', 'success');
+    }
+    setIsGeneratingSEO(false);
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setEditingCategory(prev => ({ ...prev, image_path: reader.result as string }));
+      notify?.('Asset optimized and staged.', 'success');
+    };
+    reader.readAsDataURL(file);
+  };
 
   return (
-    <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-500">
-      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-6 sm:p-10 rounded-[2rem] sm:rounded-[3rem] border border-gray-100 shadow-sm gap-6 sm:gap-4">
-        <div className="max-w-xl">
-          <h2 className="text-2xl sm:text-4xl font-black text-gray-900 tracking-tighter leading-none">Category Hierarchy</h2>
-          <p className="text-sm sm:text-lg text-gray-500 font-medium mt-4">Define store architecture and SEO paths. Drag root items to reorder.</p>
+    <div className="space-y-8 animate-in fade-in duration-500">
+      <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm gap-4">
+        <div>
+          <h2 className="text-4xl font-black text-gray-900 tracking-tighter leading-none">Category Hierarchy</h2>
+          <p className="text-lg text-gray-500 font-medium mt-4">Define store architecture and SEO paths.</p>
         </div>
         <button 
           onClick={() => { setEditingCategory({ is_active: true, name: '', slug: '' }); setTouched(false); setShowModal(true); setModalTab('info'); }}
-          className="w-full sm:w-auto bg-indigo-600 text-white px-8 sm:px-12 py-4 sm:py-5 rounded-2xl sm:rounded-[1.5rem] font-black hover:bg-indigo-700 transition-all flex items-center justify-center gap-3 shadow-2xl active:scale-95 text-xs sm:text-sm uppercase tracking-widest"
+          className="bg-indigo-600 text-white px-12 py-5 rounded-[1.5rem] font-black hover:bg-indigo-700 transition-all flex items-center justify-center gap-3 shadow-2xl active:scale-95 text-sm uppercase tracking-widest"
         >
           <span>➕</span> New Node
         </button>
       </header>
 
-      <div className="bg-white rounded-[2rem] sm:rounded-[3.5rem] border border-gray-100 shadow-sm overflow-hidden min-w-0">
+      <div className="bg-white rounded-[3.5rem] border border-gray-100 shadow-sm overflow-hidden">
         <div className="overflow-x-auto custom-scrollbar">
           <table className="w-full text-left border-collapse min-w-[320px]">
             <thead className="bg-gray-50/50 text-gray-400 text-[10px] uppercase tracking-[0.2em] font-black border-b border-gray-100">
               <tr>
-                <th className="px-4 sm:px-8 py-6 sm:py-8">Node Identity</th>
-                <th className="px-6 py-8 hidden md:table-cell">Inventory Load</th>
-                <th className="px-4 sm:px-8 py-6 sm:py-8">Visibility</th>
-                <th className="px-4 sm:px-8 py-6 sm:py-8 text-right">Actions</th>
+                <th className="px-8 py-8">Node Identity</th>
+                <th className="px-8 py-8">Inventory</th>
+                <th className="px-8 py-8">Visibility</th>
+                <th className="px-8 py-8 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {categories.sort((a,b) => a.sort_order - b.sort_order).map(cat => renderCategoryRow(cat))}
+              {categories.map(cat => (
+                <tr key={cat.id} className="hover:bg-gray-50/80 transition-colors border-b border-gray-100 group">
+                  <td className="px-8 py-5">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 flex-shrink-0 flex items-center justify-center bg-indigo-50 text-indigo-600 rounded-xl text-xl">
+                        {cat.image_path ? <OptimizedImage src={cat.image_path} alt={cat.name} width={80} height={80} /> : '📁'}
+                      </div>
+                      <div>
+                        <p className="font-black text-gray-900 text-base leading-tight">{cat.name}</p>
+                        <p className="text-[10px] text-gray-400 font-mono mt-0.5">/{cat.slug}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-8 py-5">
+                    <span className="text-sm font-bold text-gray-700">{cat.product_count} items</span>
+                  </td>
+                  <td className="px-8 py-5">
+                    <span className={`w-3 h-3 rounded-full inline-block ${cat.is_active ? 'bg-indigo-600' : 'bg-gray-200'}`}></span>
+                  </td>
+                  <td className="px-8 py-5 text-right">
+                    <button onClick={() => { setEditingCategory(cat); setTouched(false); setShowModal(true); setModalTab('info'); }} className="p-3 text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all">✏️</button>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-gray-900/70 backdrop-blur-xl z-[150] flex items-center justify-center p-0 sm:p-6 lg:p-12 overflow-y-auto">
-          <div className="bg-white w-full max-w-4xl h-full sm:h-auto sm:max-h-[90vh] sm:rounded-[3rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300 flex flex-col">
+        <div className="fixed inset-0 bg-gray-900/70 backdrop-blur-xl z-[150] flex items-center justify-center p-6 lg:p-12 overflow-y-auto">
+          <div className="bg-white w-full max-w-4xl rounded-[3rem] overflow-hidden shadow-2xl animate-in zoom-in-95 duration-300 flex flex-col max-h-[90vh]">
             
-            <div className="p-6 sm:p-10 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center flex-shrink-0">
-              <div>
-                <h3 className="text-2xl sm:text-3xl font-black text-gray-900 tracking-tighter">
-                  {editingCategory?.id ? 'Edit Taxonomy Node' : 'Initialize New Node'}
-                </h3>
-                <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mt-2">/{editingCategory?.slug || 'new-slug'}</p>
-              </div>
+            <div className="p-10 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center flex-shrink-0">
+              <h3 className="text-3xl font-black text-gray-900 tracking-tighter">
+                {editingCategory?.id ? 'Edit Taxonomy Node' : 'Initialize New Node'}
+              </h3>
               <button onClick={() => setShowModal(false)} className="w-12 h-12 flex items-center justify-center bg-white rounded-2xl text-gray-400 hover:text-gray-900 shadow-sm border border-gray-100 transition-all active:scale-90 text-xl">✕</button>
             </div>
 
-            <div className="flex px-6 sm:px-10 border-b border-gray-50 bg-white gap-4 sm:gap-8 overflow-x-auto scrollbar-hide flex-shrink-0">
+            <div className="flex px-10 border-b border-gray-50 bg-white gap-8 overflow-x-auto scrollbar-hide flex-shrink-0">
               {[
                 { id: 'info', label: 'Primary Info', icon: '📝', hasError: !!validationErrors.name || !!validationErrors.slug },
                 { id: 'media', label: 'Cover Asset', icon: '🖼️', hasError: false },
@@ -289,24 +215,25 @@ const Categories: React.FC<CategoriesProps> = ({ notify, removeNotify }) => {
                 <button
                   key={tab.id}
                   onClick={() => setModalTab(tab.id as any)}
-                  className={`py-5 sm:py-6 text-[10px] font-black uppercase tracking-widest transition-all border-b-4 flex items-center gap-2 sm:gap-3 whitespace-nowrap relative ${
+                  className={`py-6 text-[10px] font-black uppercase tracking-widest transition-all border-b-4 flex items-center gap-3 whitespace-nowrap relative ${
                     modalTab === tab.id ? 'text-indigo-600 border-indigo-600' : 'text-gray-400 border-transparent hover:text-gray-600'
                   }`}
                 >
-                  <span className="text-lg sm:text-xl">{tab.icon}</span>
+                  <span className="text-xl">{tab.icon}</span>
                   <span>{tab.label}</span>
-                  {tab.hasError && touched && <span className="absolute top-4 right-0 w-2 h-2 bg-red-500 rounded-full"></span>}
+                  {tab.hasError && touched && <span className="absolute top-4 right-0 w-2.5 h-2.5 bg-rose-500 rounded-full animate-pulse shadow-rose-200 shadow-lg"></span>}
                 </button>
               ))}
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 sm:p-10 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-10 custom-scrollbar">
               {modalTab === 'info' && (
-                <div className="space-y-8 sm:space-y-10 animate-in fade-in duration-300">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
+                <div className="space-y-10 animate-in fade-in duration-300">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     <div className="md:col-span-2">
                       <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3 ml-1">Category Title</label>
                       <input 
+                        ref={nameRef}
                         type="text" 
                         value={editingCategory?.name || ''}
                         onChange={(e) => {
@@ -314,20 +241,20 @@ const Categories: React.FC<CategoriesProps> = ({ notify, removeNotify }) => {
                           const slug = editingCategory?.id ? editingCategory.slug : name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
                           setEditingCategory({...editingCategory, name, slug});
                         }}
-                        placeholder="e.g. Winter Essentials"
-                        className={`w-full bg-gray-50 border ${validationErrors.name && touched ? 'border-red-500 ring-4 ring-red-50' : 'border-gray-200 focus:border-indigo-500'} rounded-[1.2rem] sm:rounded-2xl px-6 py-4 sm:py-5 outline-none transition-all text-xl sm:text-2xl font-black text-gray-900 shadow-inner`}
+                        className={`w-full bg-gray-50 border ${validationErrors.name && touched ? 'border-red-500 ring-4 ring-red-50' : 'border-gray-200 focus:border-indigo-500'} rounded-2xl px-6 py-5 outline-none transition-all text-2xl font-black text-gray-900 shadow-inner`}
                       />
-                      {validationErrors.name && touched && <p className="text-red-500 text-[9px] font-black uppercase ml-1 mt-2">{validationErrors.name}</p>}
+                      {validationErrors.name && touched && <p className="text-red-500 text-[10px] font-black uppercase ml-1 mt-3 animate-in slide-in-from-top-1">⚠️ {validationErrors.name}</p>}
                     </div>
                     <div>
                       <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3 ml-1">Unique Slug Path</label>
                       <input 
+                        ref={slugRef}
                         type="text" 
                         value={editingCategory?.slug || ''}
                         onChange={(e) => setEditingCategory({...editingCategory, slug: e.target.value})}
-                        className={`w-full bg-gray-50 border rounded-2xl px-6 py-4 outline-none text-gray-900 font-mono font-bold shadow-inner transition-all ${validationErrors.slug && touched ? 'border-red-500 ring-4 ring-red-50' : 'border-gray-200 focus:border-indigo-500'}`}
+                        className={`w-full bg-gray-50 border rounded-2xl px-6 py-4 outline-none text-gray-900 font-mono font-bold shadow-inner transition-all ${validationErrors.slug && touched ? 'border-red-500 ring-4 ring-red-50' : 'border-gray-100 focus:border-indigo-500'}`}
                       />
-                      {validationErrors.slug && touched && <p className="text-red-500 text-[9px] font-black uppercase ml-1 mt-2">{validationErrors.slug}</p>}
+                      {validationErrors.slug && touched && <p className="text-red-500 text-[10px] font-black uppercase ml-1 mt-3 animate-in slide-in-from-top-1">⚠️ {validationErrors.slug}</p>}
                     </div>
                     <div>
                       <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3 ml-1">Hierarchy Placement</label>
@@ -342,84 +269,33 @@ const Categories: React.FC<CategoriesProps> = ({ notify, removeNotify }) => {
                         ))}
                       </select>
                     </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3 ml-1">Category Manifesto</label>
-                      <textarea 
-                        rows={4}
-                        value={editingCategory?.description || ''}
-                        onChange={(e) => setEditingCategory({...editingCategory, description: e.target.value})}
-                        placeholder="Define the soul of this category for your customers..."
-                        className="w-full bg-gray-50 border border-gray-200 rounded-[1.5rem] px-8 py-6 outline-none focus:ring-8 focus:ring-indigo-500/5 focus:border-indigo-500 transition-all text-gray-900 leading-relaxed font-medium shadow-inner"
-                      ></textarea>
-                    </div>
                   </div>
                 </div>
               )}
 
               {modalTab === 'media' && (
                 <div className="space-y-10 animate-in fade-in duration-300">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 sm:gap-10">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                     <div className="space-y-4">
                        <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Cover Asset</label>
                        <div className="relative group overflow-hidden rounded-[2.5rem] border-4 border-dashed border-gray-100 aspect-video flex flex-col items-center justify-center bg-gray-50 hover:bg-white hover:border-indigo-200 transition-all shadow-inner">
                         {editingCategory?.image_path ? (
                           <>
-                            <OptimizedImage src={editingCategory.image_path} alt={editingCategory.name || 'Category cover'} aspectRatio="aspect-video" width={400} height={300} sizes="(max-width: 640px) 100vw, 400px" />
+                            <OptimizedImage src={editingCategory.image_path} alt={editingCategory.name || 'Category cover'} aspectRatio="aspect-video" />
                             <div className="absolute inset-0 bg-indigo-900/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center gap-4 transition-opacity backdrop-blur-sm">
-                              <button 
-                                onClick={() => fileInputRef.current?.click()}
-                                className="bg-white text-indigo-600 px-8 py-3 rounded-2xl font-black shadow-2xl text-xs uppercase tracking-widest active:scale-95 transition-transform"
-                              >
+                              <label className="bg-white text-indigo-600 px-8 py-3 rounded-2xl font-black shadow-2xl text-xs uppercase tracking-widest cursor-pointer active:scale-95 transition-transform">
                                 Replace Asset
-                              </button>
-                              <button 
-                                onClick={handleDeleteImage}
-                                className="bg-red-500 text-white px-8 py-3 rounded-2xl font-black shadow-2xl text-xs uppercase tracking-widest active:scale-95 transition-transform"
-                              >
-                                Delete Asset
-                              </button>
+                                <input type="file" accept=".jpg,.jpeg,.png,.webp" className="hidden" onChange={handleImageUpload} />
+                              </label>
                             </div>
                           </>
                         ) : (
-                          <button 
-                            onClick={() => fileInputRef.current?.click()}
-                            disabled={isOptimizingImage}
-                            className="text-center p-8 group w-full h-full flex flex-col items-center justify-center"
-                          >
-                            {isOptimizingImage ? (
-                              <div className="w-12 h-12 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
-                            ) : (
-                              <>
-                                <span className="text-6xl mb-4 block group-hover:scale-110 transition-transform duration-500">📸</span>
-                                <p className="text-gray-900 font-black text-lg mb-1">Staging Area</p>
-                                <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest">JPG, PNG, WebP (Max 2MB)</p>
-                              </>
-                            )}
-                          </button>
+                          <label className="text-center p-8 group w-full h-full flex flex-col items-center justify-center cursor-pointer">
+                            <span className="text-6xl mb-4 block group-hover:scale-110 transition-transform duration-500">📸</span>
+                            <p className="text-gray-900 font-black text-lg mb-1">Staging Area</p>
+                            <input type="file" accept=".jpg,.jpeg,.png,.webp" className="hidden" onChange={handleImageUpload} />
+                          </label>
                         )}
-                        <input 
-                          type="file" 
-                          ref={fileInputRef}
-                          accept=".jpg,.jpeg,.png,.webp" 
-                          className="hidden" 
-                          onChange={handleImageUpload} 
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-6">
-                      <div className="p-8 bg-gray-50 rounded-[2.5rem] border border-gray-100 shadow-inner">
-                        <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-6 ml-1">Storefront Card Preview</h5>
-                        <div className="relative w-full aspect-[4/3] rounded-[2rem] overflow-hidden shadow-2xl border-4 border-white group">
-                           {editingCategory?.image_path ? (
-                             <OptimizedImage src={editingCategory.image_path} alt="Preview" width={400} height={300} sizes="400px" />
-                           ) : (
-                             <div className="w-full h-full bg-gray-100 flex items-center justify-center text-gray-300 font-black italic">No Asset Defined</div>
-                           )}
-                           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-end p-8">
-                              <p className="text-white font-black text-2xl tracking-tighter leading-none">{editingCategory?.name || 'New Collection'}</p>
-                              <p className="text-white/60 text-[9px] font-black uppercase tracking-widest mt-3">{editingCategory?.product_count || 0} Entities Cataloged</p>
-                           </div>
-                        </div>
                       </div>
                     </div>
                   </div>
@@ -433,7 +309,7 @@ const Categories: React.FC<CategoriesProps> = ({ notify, removeNotify }) => {
                       <h4 className="text-2xl font-black mb-2 flex items-center justify-center lg:justify-start gap-3">
                         <span className="text-3xl">✨</span> Gemini SEO Core
                       </h4>
-                      <p className="text-indigo-200 text-sm font-medium leading-relaxed max-w-md mx-auto lg:mx-0">Synthesize optimized metadata nodes based on your current catalog context.</p>
+                      <p className="text-indigo-200 text-sm font-medium leading-relaxed max-w-md mx-auto lg:mx-0">Synthesize optimized metadata nodes.</p>
                     </div>
                     <button onClick={handleAIDesign} disabled={isGeneratingSEO} className="w-full lg:w-auto bg-white text-indigo-900 px-10 py-5 rounded-[1.5rem] font-black hover:bg-indigo-50 transition-all shadow-2xl disabled:opacity-50">
                       {isGeneratingSEO ? <span className="w-5 h-5 border-3 border-indigo-200 border-t-indigo-900 rounded-full animate-spin"></span> : 'Synthesize Meta'}
@@ -448,6 +324,7 @@ const Categories: React.FC<CategoriesProps> = ({ notify, removeNotify }) => {
                         </span>
                       </div>
                       <input 
+                        ref={metaTitleRef}
                         type="text" 
                         value={editingCategory?.meta_title || ''}
                         onChange={(e) => setEditingCategory({...editingCategory, meta_title: e.target.value})}
@@ -462,6 +339,7 @@ const Categories: React.FC<CategoriesProps> = ({ notify, removeNotify }) => {
                         </span>
                       </div>
                       <textarea 
+                        ref={metaDescRef}
                         rows={4}
                         value={editingCategory?.meta_description || ''}
                         onChange={(e) => setEditingCategory({...editingCategory, meta_description: e.target.value})}
@@ -473,14 +351,18 @@ const Categories: React.FC<CategoriesProps> = ({ notify, removeNotify }) => {
               )}
             </div>
 
-            <div className="p-6 sm:p-10 border-t border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row justify-between items-center gap-6 flex-shrink-0">
+            <div className="p-10 border-t border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row justify-between items-center gap-6 flex-shrink-0">
               <div className="flex items-center gap-4 w-full sm:w-auto p-4 bg-white border border-gray-100 rounded-2xl shadow-sm">
-                <input type="checkbox" id="modal_is_active" checked={editingCategory?.is_active} onChange={(e) => setEditingCategory({...editingCategory, is_active: e.target.checked})} className="w-7 h-7 text-indigo-600 border-gray-300 rounded-xl focus:ring-indigo-500 cursor-pointer" />
+                <input type="checkbox" id="modal_is_active" checked={editingCategory?.is_active} onChange={(e) => setEditingCategory({...editingCategory, is_active: e.target.checked})} className="w-7 h-7 text-indigo-600 border-gray-300 rounded-xl" />
                 <label htmlFor="modal_is_active" className="cursor-pointer text-[10px] font-black text-gray-900 uppercase tracking-[0.2em]">Visibility Enabled</label>
               </div>
               <div className="flex gap-4 w-full sm:w-auto">
                 <button onClick={() => setShowModal(false)} className="flex-1 sm:flex-none px-8 py-4 rounded-2xl font-black text-gray-400 hover:text-gray-900 transition-all text-xs uppercase tracking-widest">Discard</button>
-                <button onClick={handleSave} disabled={touched && !isCategoryValid} className={`flex-1 sm:flex-none px-14 py-4 sm:py-5 rounded-[1.5rem] font-black transition-all active:scale-95 text-xs sm:text-sm uppercase tracking-[0.2em] ${(!isCategoryValid && touched) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-2xl'}`}>
+                <button 
+                  onClick={handleSave} 
+                  disabled={touched && !isCategoryValid} 
+                  className={`flex-1 sm:flex-none px-14 py-5 rounded-[1.5rem] font-black transition-all active:scale-95 text-xs sm:text-sm uppercase tracking-[0.2em] ${(!isCategoryValid && touched) ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-2xl shadow-indigo-100'}`}
+                >
                   Commit Update
                 </button>
               </div>

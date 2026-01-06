@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { InventoryLog, Warehouse } from '../types';
 
@@ -68,6 +67,10 @@ const Inventory: React.FC<InventoryProps> = ({ notify }) => {
     }, 1200);
   };
 
+  const handleFullStocktake = () => {
+    notify?.("Opening physical audit protocol. Please ensure scanner synchronization.", "info");
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <header className="flex justify-between items-end bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
@@ -82,7 +85,7 @@ const Inventory: React.FC<InventoryProps> = ({ notify }) => {
           >
             <span>🔄</span> Inter-Hub Transfer
           </button>
-          <button className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-xl shadow-indigo-100 active:scale-95">
+          <button onClick={handleFullStocktake} className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-xl shadow-indigo-100 active:scale-95">
             <span>📋</span> Full Stocktake
           </button>
         </div>

@@ -1,10 +1,9 @@
-
 import React, { useState } from 'react';
 import { Customer, Address, CustomerNote } from '../types';
 
 // Add missing props interface
 interface CustomersProps {
-  notify?: (message: string, type?: 'success' | 'error' | 'info') => void;
+  notify?: (message: string, type?: 'success' | 'error' | 'info' | 'loading') => string;
 }
 
 const MOCK_CUSTOMERS: Customer[] = [
@@ -46,7 +45,6 @@ const MOCK_CUSTOMERS: Customer[] = [
   }
 ];
 
-// Fix: Accept notify prop from parent
 const Customers: React.FC<CustomersProps> = ({ notify }) => {
   const [customers, setCustomers] = useState<Customer[]>(MOCK_CUSTOMERS);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -65,6 +63,24 @@ const Customers: React.FC<CustomersProps> = ({ notify }) => {
       setSelectedCustomer(prev => prev ? { ...prev, is_blocked: !prev.is_blocked } : null);
     }
     notify?.(`Customer ${id} status updated.`, 'info');
+  };
+
+  const handleAddNote = () => {
+    if (!selectedCustomer) return;
+    const noteContent = window.prompt(`New Internal Note for ${selectedCustomer.name}:`);
+    if (noteContent?.trim()) {
+      const newNote: CustomerNote = {
+        id: Math.random().toString(36).substr(2, 5),
+        admin_id: 'admin-1',
+        admin_name: 'Current User',
+        note: noteContent,
+        created_at: new Date().toISOString().split('T')[0]
+      };
+      const updatedCustomer = { ...selectedCustomer, notes: [newNote, ...selectedCustomer.notes] };
+      setCustomers(prev => prev.map(c => c.id === selectedCustomer.id ? updatedCustomer : c));
+      setSelectedCustomer(updatedCustomer);
+      notify?.("Internal manifest updated with new personnel note.", "success");
+    }
   };
 
   return (
@@ -91,7 +107,7 @@ const Customers: React.FC<CustomersProps> = ({ notify }) => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Customer List */}
         <div className="lg:col-span-2 bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden flex flex-col h-[700px]">
-          <div className="overflow-y-auto flex-1">
+          <div className="overflow-y-auto flex-1 custom-scrollbar">
             <table className="w-full text-left">
               <thead className="bg-gray-50 sticky top-0 z-10 text-gray-400 text-[10px] uppercase tracking-widest font-black border-b border-gray-100">
                 <tr>
@@ -143,7 +159,7 @@ const Customers: React.FC<CustomersProps> = ({ notify }) => {
         {/* Customer Detail Sidebar */}
         <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden flex flex-col h-[700px]">
           {selectedCustomer ? (
-            <div className="p-8 space-y-8 overflow-y-auto">
+            <div className="p-8 space-y-8 overflow-y-auto custom-scrollbar">
               <div className="text-center space-y-4">
                 <img src={selectedCustomer.avatar} className="w-24 h-24 rounded-3xl mx-auto border-4 border-indigo-50 shadow-xl" alt="" />
                 <div>
@@ -180,18 +196,18 @@ const Customers: React.FC<CustomersProps> = ({ notify }) => {
                 {selectedCustomer.addresses.length > 0 ? (
                   <div className="p-4 bg-gray-50 rounded-2xl border border-gray-100 text-sm space-y-1">
                     <p className="font-black text-gray-800">{selectedCustomer.addresses[0].address_line1}</p>
-                    <p className="text-gray-500 font-medium text-gray-500">{selectedCustomer.addresses[0].city}, {selectedCustomer.addresses[0].state} {selectedCustomer.addresses[0].zip_code}</p>
-                    <p className="text-gray-500 font-medium text-gray-500">{selectedCustomer.addresses[0].country}</p>
+                    <p className="text-gray-500 font-medium">{selectedCustomer.addresses[0].city}, {selectedCustomer.addresses[0].state} {selectedCustomer.addresses[0].zip_code}</p>
+                    <p className="text-gray-500 font-medium">{selectedCustomer.addresses[0].country}</p>
                   </div>
                 ) : (
-                  <p className="text-gray-400 text-sm italic text-gray-500">No addresses saved.</p>
+                  <p className="text-gray-400 text-sm italic">No addresses saved.</p>
                 )}
               </div>
 
               <div>
                 <div className="flex justify-between items-center mb-4">
                   <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Internal Support Notes</h4>
-                  <button className="text-[10px] font-black text-indigo-600">+ Add</button>
+                  <button onClick={handleAddNote} className="text-[10px] font-black text-indigo-600 hover:underline active:scale-95 transition-transform">+ Add</button>
                 </div>
                 <div className="space-y-3">
                   {selectedCustomer.notes.map(note => (

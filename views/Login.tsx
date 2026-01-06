@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { User } from '../types';
 
 interface LoginProps {
@@ -7,32 +6,50 @@ interface LoginProps {
 }
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
-  const [email, setEmail] = useState('admin@lumina.com');
-  const [password, setPassword] = useState('password');
+  const [email, setEmail] = useState('abhaycode12@gmail.com');
+  const [password, setPassword] = useState('123456');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [touched, setTouched] = useState({ email: false, password: false });
+
+  const emailError = useMemo(() => {
+    if (!touched.email) return null;
+    if (!email) return "Email node identity is required.";
+    if (!/^\S+@\S+\.\S+$/.test(email)) return "Invalid electronic mail protocol.";
+    return null;
+  }, [email, touched.email]);
+
+  const passwordError = useMemo(() => {
+    if (!touched.password) return null;
+    if (!password) return "Security passcode is mandatory.";
+    if (password.length < 4) return "Passcode below minimum security threshold.";
+    return null;
+  }, [password, touched.password]);
+
+  const isFormValid = !emailError && !passwordError && email && password;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isFormValid) return;
+    
     setIsLoading(true);
     setError(null);
 
     // Simulating API call
     setTimeout(() => {
-      if (email === 'admin@lumina.com' && password === 'password') {
-        // Fix: Added missing roles and overrides properties to satisfy User interface definition in types.ts
+      if (email === 'abhaycode12@gmail.com' && password === '123456') {
         onLogin({
           id: '1',
-          name: 'Alex Rivera',
-          email: 'admin@lumina.com',
+          name: 'Abhay',
+          email: 'abhaycode12@gmail.com',
           role: 'super-admin',
           roles: ['role-sa'],
-          avatar: 'https://picsum.photos/40/40?random=1',
+          avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150&h=150',
           permissions: ['*'],
           overrides: []
         });
       } else {
-        setError('Invalid credentials. Please try again.');
+        setError('Authorization Failed: Invalid credential pair detected.');
         setIsLoading(false);
       }
     }, 1200);
@@ -46,69 +63,72 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             L
           </div>
           <h1 className="text-3xl font-bold text-gray-900">LuminaCommerce</h1>
-          <p className="text-gray-500 mt-2">Enterprise Admin Portal</p>
+          <p className="text-gray-500 mt-2 tracking-tight">Enterprise Admin Portal • v4.0</p>
         </div>
 
-        <div className="bg-white rounded-3xl p-8 shadow-xl shadow-gray-200/50 border border-gray-100">
-          <form onSubmit={handleSubmit} className="space-y-6">
+        <div className="bg-white rounded-[2.5rem] p-10 shadow-2xl shadow-gray-200/50 border border-gray-100">
+          <form onSubmit={handleSubmit} className="space-y-8">
             {error && (
-              <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm font-medium border border-red-100 animate-in fade-in slide-in-from-top-2">
+              <div className="bg-red-50 text-red-600 p-4 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-red-100 animate-in fade-in slide-in-from-top-2">
                 ⚠️ {error}
               </div>
             )}
 
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Email Address</label>
+              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 ml-1">Core Identity (Email)</label>
               <input 
                 type="email" 
                 required
                 value={email}
+                onBlur={() => setTouched({ ...touched, email: true })}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-gray-900"
-                placeholder="name@company.com"
+                className={`w-full bg-gray-50 border ${emailError ? 'border-red-500 ring-4 ring-red-50' : 'border-gray-200 focus:border-indigo-500'} rounded-2xl px-6 py-4 outline-none transition-all text-gray-900 font-bold`}
+                placeholder="abhaycode12@gmail.com"
               />
+              {emailError && <p className="text-red-500 text-[9px] font-black uppercase mt-2 ml-1">{emailError}</p>}
             </div>
 
             <div>
-              <div className="flex justify-between items-center mb-2">
-                <label className="text-sm font-semibold text-gray-700">Password</label>
-                <a href="#" className="text-xs font-bold text-indigo-600 hover:text-indigo-800">Forgot?</a>
+              <div className="flex justify-between items-center mb-3 ml-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Security Passcode</label>
+                <a href="#" className="text-[9px] font-black text-indigo-600 uppercase tracking-widest hover:underline">Reset Logic</a>
               </div>
               <input 
                 type="password" 
                 required
                 value={password}
+                onBlur={() => setTouched({ ...touched, password: true })}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-gray-900"
+                className={`w-full bg-gray-50 border ${passwordError ? 'border-red-500 ring-4 ring-red-50' : 'border-gray-200 focus:border-indigo-500'} rounded-2xl px-6 py-4 outline-none transition-all text-gray-900 font-bold`}
                 placeholder="••••••••"
               />
+              {passwordError && <p className="text-red-500 text-[9px] font-black uppercase mt-2 ml-1">{passwordError}</p>}
             </div>
 
-            <div className="flex items-center">
-              <input type="checkbox" id="remember" className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" />
-              <label htmlFor="remember" className="ml-2 text-sm text-gray-600">Keep me logged in</label>
+            <div className="flex items-center ml-1">
+              <input type="checkbox" id="remember" className="w-5 h-5 text-indigo-600 border-gray-300 rounded-lg focus:ring-indigo-500 cursor-pointer" />
+              <label htmlFor="remember" className="ml-3 text-xs font-bold text-gray-500 uppercase tracking-tighter cursor-pointer">Persist Session State</label>
             </div>
 
             <button 
               type="submit"
-              disabled={isLoading}
-              className="w-full bg-indigo-600 text-white py-3.5 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 disabled:opacity-50 flex items-center justify-center gap-2"
+              disabled={isLoading || !isFormValid}
+              className={`
+                w-full py-5 rounded-2xl font-black text-[12px] uppercase tracking-[0.2em] transition-all shadow-xl flex items-center justify-center gap-3
+                ${isFormValid 
+                  ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-indigo-100 active:scale-95' 
+                  : 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'}
+              `}
             >
               {isLoading ? (
-                <>
-                  <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Authenticating...
-                </>
-              ) : 'Sign In to Dashboard'}
+                <div className="w-5 h-5 border-3 border-white/20 border-t-white rounded-full animate-spin"></div>
+              ) : 'Execute Portal Entry'}
             </button>
           </form>
 
-          <p className="mt-8 text-center text-xs text-gray-400">
-            &copy; 2025 LuminaCommerce Inc. All rights reserved.<br/>
-            Security enforced by token-based authentication.
+          <p className="mt-10 text-center text-[9px] text-gray-400 font-bold uppercase tracking-widest leading-loose">
+            &copy; 2025 LuminaCommerce Core Systems.<br/>
+            Access monitored via internal audit protocols.
           </p>
         </div>
       </div>

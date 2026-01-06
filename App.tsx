@@ -82,7 +82,7 @@ const App: React.FC = () => {
   const renderView = () => {
     const viewProps = { notify: addNotification, removeNotify: removeNotification };
     switch (activeView) {
-      case 'dashboard': return <Dashboard />;
+      case 'dashboard': return <Dashboard {...viewProps} />;
       case 'products': return <Products {...viewProps} />;
       case 'categories': return <Categories {...viewProps} />;
       case 'inventory': return <Inventory {...viewProps} />;
@@ -94,7 +94,7 @@ const App: React.FC = () => {
       case 'analytics': return <Analytics {...viewProps} />;
       case 'users': return <Users {...viewProps} />;
       case 'settings': return <Settings {...viewProps} />;
-      default: return <Dashboard />;
+      default: return <Dashboard {...viewProps} />;
     }
   };
 

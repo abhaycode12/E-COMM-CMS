@@ -302,7 +302,7 @@ export interface Product {
   category_id: string;
   category_name?: string;
   brand?: string;
-  status: 'active' | 'draft' | 'archived' | 'out_of_stock';
+  status: 'live' | 'draft' | 'archived' | 'out_of_stock';
   description: string;
   short_description?: string;
   hsn_code?: string;

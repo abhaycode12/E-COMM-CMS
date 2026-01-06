@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+
+import React, { useState, useMemo } from 'react';
 import { SystemSettings, Role, ModuleType, ActionType } from '../types';
 import PermissionMatrix from '../components/PermissionMatrix';
 import { suggestPermissions } from '../services/geminiService';
@@ -30,51 +31,55 @@ const Settings: React.FC<SettingsProps> = ({ notify, removeNotify }) => {
     }
   });
 
-  const [activeTab, setActiveTab] = useState<'general' | 'rbac' | 'payments' | 'integration'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'rbac' | 'payments' | 'integration'>('rbac');
   const [roles, setRoles] = useState<Role[]>(MOCK_ROLES);
   const [showRoleModal, setShowRoleModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAISuggesting, setIsAISuggesting] = useState(false);
+  const [aiReasoning, setAiReasoning] = useState<string | null>(null);
+  const [roleScope, setRoleScope] = useState('');
+  const [touched, setTouched] = useState(false);
   
   const [editingRole, setEditingRole] = useState<Partial<Role> | null>(null);
-  const [errors, setErrors] = useState<Record<string, string[]>>({});
+
+  const roleValidationErrors = useMemo(() => {
+    const errs: Record<string, string> = {};
+    if (!editingRole) return errs;
+    if (!editingRole.display_name?.trim()) errs.display_name = "Role identity title is required.";
+    if (!editingRole.name?.trim()) errs.name = "Policy identifier slug is required.";
+    if (!editingRole.permissions || editingRole.permissions.length === 0) {
+      errs.permissions = "Assign at least one permission node to this role.";
+    }
+    return errs;
+  }, [editingRole]);
+
+  const isRoleValid = Object.keys(roleValidationErrors).length === 0;
 
   const handleAISuggest = async () => {
     if (!editingRole?.display_name?.trim()) {
-      notify?.("Identity title is required for AI contextual analysis.", "error");
+      notify?.("Enter a role name first for Lumina to analyze requirements.", "error");
       return;
     }
 
     setIsAISuggesting(true);
-    const loadId = notify?.(`Lumina is synthesizing security policies for "${editingRole.display_name}"...`, 'loading');
+    setAiReasoning(null);
+    const loadId = notify?.(`Lumina is architecting a least-privilege policy for "${editingRole.display_name}"...`, 'loading');
     
     try {
-      const result = await suggestPermissions(editingRole.display_name);
+      const result = await suggestPermissions(editingRole.display_name, roleScope);
       if (loadId && removeNotify) removeNotify(loadId);
 
       if (result) {
         setEditingRole(prev => ({ ...prev, permissions: result.permissions }));
-        notify?.(`Gemini has recommended ${result.permissions.length} access nodes based on role scope.`, "success");
-      } else {
-        notify?.("Unable to reach Security Orchestrator. Please try again.", "error");
+        setAiReasoning(result.reasoning);
+        notify?.(`Suggested ${result.permissions.length} permission nodes based on role persona.`, "success");
       }
     } catch (error) {
       if (loadId && removeNotify) removeNotify(loadId);
-      notify?.("AI Protocol Interrupted.", "error");
+      notify?.("AI security synthesis interrupted. Check connection.", "error");
     } finally {
       setIsAISuggesting(false);
     }
-  };
-
-  const validateRole = (data: Partial<Role>): boolean => {
-    const newErrors: Record<string, string[]> = {};
-    if (!data.display_name?.trim()) newErrors.display_name = ["Role title is required"];
-    if (!data.name?.trim()) newErrors.name = ["System identifier key is required"];
-    if (!data.permissions || data.permissions.length === 0) {
-      newErrors.permissions = ["Grant at least one permission node to this role identity"];
-    }
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
   };
 
   const handleTogglePermission = (moduleId: ModuleType, action: ActionType) => {
@@ -87,33 +92,38 @@ const Settings: React.FC<SettingsProps> = ({ notify, removeNotify }) => {
         : [...current, permId];
       return { ...prev, permissions: updated };
     });
+    setAiReasoning(null);
   };
 
-  const handleToggleModule = (moduleId: ModuleType, currentPerms: string[]) => {
+  const handleToggleModule = (moduleId: ModuleType) => {
     const allModulePermIds = ACTIONS.map(a => `${moduleId}.${a}`);
     const hasAll = allModulePermIds.every(id => (editingRole?.permissions || []).includes(id));
 
     setEditingRole(prev => {
       if (!prev) return null;
-      const basePerms = prev.permissions || [];
-      const filtered = basePerms.filter(p => !p.startsWith(`${moduleId}.`));
-      const finalPerms = !hasAll ? [...filtered, ...allModulePermIds] : filtered;
+      const basePerms = (prev.permissions || []).filter(p => !p.startsWith(`${moduleId}.`));
+      const finalPerms = !hasAll ? [...basePerms, ...allModulePermIds] : basePerms;
       return { ...prev, permissions: finalPerms };
     });
+    setAiReasoning(null);
   };
 
   const handleSaveRole = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingRole || !validateRole(editingRole)) return;
+    setTouched(true);
+    if (!editingRole || !isRoleValid) {
+      notify?.("Policy validation failed. Resolve missing nodes before committing.", "error");
+      return;
+    }
 
     setIsSubmitting(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      await new Promise(resolve => setTimeout(resolve, 1200));
       
       if (editingRole.id) {
         const updatedRole = editingRole as Role;
         setRoles(prev => prev.map(r => r.id === updatedRole.id ? updatedRole : r));
-        notify?.(`Policy logic for '${updatedRole.display_name}' committed to ledger.`, "success");
+        notify?.(`Security policy for "${updatedRole.display_name}" updated in system core.`, "success");
       } else {
         const createdRole: Role = {
           id: `role-${Math.random().toString(36).substr(2, 5)}`,
@@ -124,100 +134,111 @@ const Settings: React.FC<SettingsProps> = ({ notify, removeNotify }) => {
           created_at: new Date().toISOString().split('T')[0]
         };
         setRoles(prev => [...prev, createdRole]);
-        notify?.(`Identity role '${createdRole.display_name}' registered.`, "success");
+        notify?.(`New role identity "${createdRole.display_name}" registered.`, "success");
       }
       setShowRoleModal(false);
       setEditingRole(null);
+      setAiReasoning(null);
+      setRoleScope('');
+      setTouched(false);
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  const handleEditRole = (role: Role) => {
+    setEditingRole({ ...role });
+    setRoleScope('');
+    setAiReasoning(null);
+    setTouched(false);
+    setShowRoleModal(true);
+  };
+
   const handleDeleteRole = (id: string, name: string) => {
     if (id === 'role-sa') {
-      notify?.("Protocol violation: System-critical roles cannot be terminated.", "error");
+      notify?.("System Constraint: Root Administrator role cannot be terminated.", "error");
       return;
     }
-    if (window.confirm(`Terminate role '${name}'? All assigned staff will lose associated gateways immediately.`)) {
+    if (window.confirm(`Terminate role "${name}"? This will immediately revoke access for all assigned personnel.`)) {
       setRoles(prev => prev.filter(r => r.id !== id));
-      notify?.(`Role purged from security matrix.`, "info");
+      notify?.(`Role purged from system registry.`, "info");
     }
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <header className="flex justify-between items-end bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
-        <div>
-          <h2 className="text-3xl font-black text-gray-900 tracking-tight">System Configuration</h2>
-          <p className="text-gray-500 mt-1">Manage global parameters, RBAC nodes, and security policy architecture.</p>
+    <div className="space-y-10 animate-in fade-in duration-500 pb-20">
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-end bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm gap-8 relative overflow-hidden">
+        <div className="relative z-10">
+          <h2 className="text-4xl font-black text-gray-900 tracking-tighter leading-none">System Architecture</h2>
+          <p className="text-gray-500 mt-6 font-medium text-lg max-w-xl">Configure administrative nodes, regional treasury rules, and the AI security matrix.</p>
         </div>
-        <button 
-          onClick={() => notify?.("Global configuration synchronized with all regional hubs.", "success")}
-          className="px-10 py-3 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 shadow-xl shadow-indigo-100 active:scale-95 transition-all"
-        >
-          Sync Protocol
-        </button>
+        <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-indigo-50/50 rounded-full blur-3xl"></div>
       </header>
 
-      <div className="flex gap-8">
-        <div className="w-64 space-y-1">
+      <div className="flex flex-col lg:flex-row gap-10">
+        <aside className="lg:w-72 flex-shrink-0 space-y-2">
           {[
-            { id: 'general', label: 'General Identity', icon: '🏠' },
-            { id: 'rbac', label: 'Governance & RBAC', icon: '🔐' },
-            { id: 'payments', label: 'Treasury Settings', icon: '💳' },
-            { id: 'integration', label: 'Network Bridges', icon: '🔗' },
+            { id: 'rbac', label: 'Identity & RBAC', icon: '🔐' },
+            { id: 'general', label: 'Store Identity', icon: '🏠' },
+            { id: 'payments', label: 'Treasury Nodes', icon: '💰' },
+            { id: 'integration', label: 'External Hubs', icon: '🔗' },
           ].map(group => (
             <button
               key={group.id}
               onClick={() => setActiveTab(group.id as any)}
-              className={`w-full text-left px-6 py-4 rounded-2xl text-sm font-black transition-all flex items-center gap-3 ${
-                activeTab === group.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100' : 'text-gray-400 hover:bg-white hover:text-gray-600'
+              className={`w-full text-left px-8 py-5 rounded-[1.5rem] text-xs font-black uppercase tracking-[0.1em] transition-all flex items-center gap-4 ${
+                activeTab === group.id ? 'bg-indigo-600 text-white shadow-2xl shadow-indigo-100 scale-[1.02]' : 'text-gray-400 hover:bg-white hover:text-gray-600'
               }`}
             >
-              <span>{group.icon}</span>
+              <span className="text-xl">{group.icon}</span>
               {group.label}
             </button>
           ))}
-        </div>
+        </aside>
 
-        <div className="flex-1 bg-white p-10 rounded-[2.5rem] border border-gray-100 shadow-sm min-h-[600px]">
+        <main className="flex-1 bg-white p-12 rounded-[3.5rem] border border-gray-100 shadow-sm min-h-[600px] min-w-0">
           {activeTab === 'rbac' && (
-            <div className="space-y-10 animate-in fade-in duration-300">
-              <div className="flex justify-between items-center">
-                <h3 className="text-xl font-black text-gray-900">RBAC Identity Matrix</h3>
+            <div className="space-y-12 animate-in fade-in duration-300">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
+                <div className="space-y-1">
+                   <h3 className="text-2xl font-black text-gray-900 tracking-tight">Security Personas</h3>
+                   <p className="text-sm font-medium text-gray-500">Define operational roles and their respective system gateways.</p>
+                </div>
                 <button 
-                  onClick={() => { setEditingRole({ permissions: [], is_active: true }); setErrors({}); setShowRoleModal(true); }} 
-                  className="px-6 py-2 bg-indigo-50 text-indigo-600 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-100 active:scale-95 transition-all"
+                  onClick={() => { setEditingRole({ permissions: [], is_active: true, display_name: '', name: '' }); setTouched(false); setRoleScope(''); setAiReasoning(null); setShowRoleModal(true); }} 
+                  className="w-full sm:w-auto px-8 py-3 bg-indigo-50 text-indigo-600 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-indigo-600 hover:text-white active:scale-95 transition-all shadow-sm"
                 >
-                  Define New Role
+                  Create New Persona
                 </button>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
                 {roles.map(role => (
-                  <div key={role.id} className="p-8 bg-gray-50 border border-gray-100 rounded-[2.5rem] hover:bg-white hover:border-indigo-100 hover:shadow-xl transition-all group">
-                    <div className="flex justify-between mb-4">
-                      <div className="w-12 h-12 bg-white rounded-2xl shadow-sm border border-gray-100 flex items-center justify-center text-2xl">🛡️</div>
-                      <span className={`text-[8px] px-2.5 py-1 rounded-full font-black uppercase tracking-widest ${role.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                        {role.is_active ? 'ENABLED' : 'OFFLINE'}
+                  <div key={role.id} className="p-8 bg-gray-50 border border-gray-100 rounded-[2.5rem] hover:bg-white hover:border-indigo-100 hover:shadow-xl transition-all group relative overflow-hidden flex flex-col min-h-[300px]">
+                    <div className="flex justify-between items-start mb-10">
+                      <div className="w-14 h-14 bg-white rounded-2xl shadow-sm border border-gray-100 flex items-center justify-center text-3xl">🛡️</div>
+                      <span className={`text-[9px] px-3 py-1 rounded-full font-black uppercase tracking-widest ${role.is_active ? 'bg-green-100 text-green-700 shadow-sm' : 'bg-red-100 text-red-700 shadow-sm'}`}>
+                        {role.is_active ? 'ACTIVE' : 'LOCKED'}
                       </span>
                     </div>
-                    <h4 className="text-lg font-black text-gray-900">{role.display_name}</h4>
-                    <p className="text-[10px] font-black text-indigo-600 uppercase tracking-[0.1em] mb-4">{role.name}</p>
-                    <p className="text-xs text-gray-400 font-bold mb-6">
-                      {role.permissions.includes('*') ? 'Full System Authorization' : `${role.permissions.length} Action Gateways Grant`}
-                    </p>
-                    <div className="flex gap-2">
+                    <div className="flex-1">
+                      <h4 className="text-xl font-black text-gray-900 leading-tight mb-2 truncate">{role.display_name}</h4>
+                      <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-6">ID: {role.name}</p>
+                      <p className="text-xs text-gray-400 font-bold mb-8 leading-relaxed">
+                        {role.permissions.includes('*') ? 'Unrestricted System Access' : `${role.permissions.length} Granular Permission Gates`}
+                      </p>
+                    </div>
+                    <div className="flex gap-2 pt-6 border-t border-gray-100">
                       <button 
-                        onClick={() => { setEditingRole(role); setErrors({}); setShowRoleModal(true); }}
-                        className="flex-1 py-3 bg-white border border-gray-200 rounded-xl text-xs font-black text-gray-600 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-all"
+                        onClick={() => handleEditRole(role)}
+                        className="flex-1 py-3.5 bg-white border border-gray-200 rounded-xl text-[10px] font-black uppercase tracking-widest text-gray-600 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-all active:scale-95 shadow-sm"
                       >
-                        Modify Policy
+                        Edit Policy
                       </button>
                       <button 
                         onClick={() => handleDeleteRole(role.id, role.display_name)}
-                        className="p-3 bg-white border border-gray-200 rounded-xl text-xs text-red-500 hover:bg-red-50 transition-all"
-                        title="Delete Role"
+                        className="p-3.5 bg-white border border-gray-200 rounded-xl text-red-400 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all active:scale-95 shadow-sm"
+                        title="Purge Role"
                       >
                         🗑️
                       </button>
@@ -227,75 +248,114 @@ const Settings: React.FC<SettingsProps> = ({ notify, removeNotify }) => {
               </div>
 
               {showRoleModal && (
-                <div className="fixed inset-0 bg-gray-900/80 backdrop-blur-xl z-[100] flex items-center justify-center p-4">
-                  <div className="bg-white rounded-[3rem] w-full max-w-5xl h-[85vh] flex flex-col shadow-2xl animate-in zoom-in-95">
-                    <form onSubmit={handleSaveRole} className="flex flex-col h-full">
-                      <div className="p-10 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                <div className="fixed inset-0 bg-gray-900/80 backdrop-blur-xl z-[150] flex items-center justify-center p-4">
+                  <div className="bg-white rounded-[3rem] w-full max-w-5xl shadow-2xl animate-in zoom-in-95 overflow-hidden flex flex-col max-h-[90vh]">
+                    <form onSubmit={handleSaveRole} className="flex flex-col h-full overflow-hidden">
+                      <div className="p-10 border-b border-gray-100 flex justify-between items-center bg-gray-50/30 flex-shrink-0">
                         <div>
-                          <h3 className="text-2xl font-black text-gray-900 tracking-tight">
-                            {editingRole?.id ? 'Edit Access Identity' : 'Define Security Identity'}
+                          <h3 className="text-3xl font-black text-gray-900 tracking-tight leading-none">
+                            {editingRole?.id ? 'Edit Access Identity' : 'Define New Identity'}
                           </h3>
-                          <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mt-1">Protocol Initialization</p>
+                          <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mt-4">Node Ledger • {editingRole?.id || 'NEW_MANIFEST'}</p>
                         </div>
-                        <button type="button" onClick={() => setShowRoleModal(false)} className="w-12 h-12 flex items-center justify-center bg-white border border-gray-100 rounded-2xl text-gray-400 hover:text-gray-900 transition-all">✕</button>
+                        <button type="button" onClick={() => setShowRoleModal(false)} className="w-14 h-14 flex items-center justify-center bg-white border border-gray-100 rounded-2xl text-gray-400 hover:text-gray-900 shadow-sm transition-all text-xl">✕</button>
                       </div>
 
-                      <div className="flex-1 overflow-y-auto p-10 space-y-10 custom-scrollbar">
-                        <div className="grid grid-cols-2 gap-8">
-                          <div>
-                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Display Title</label>
-                            <input 
-                              type="text" 
-                              required
-                              value={editingRole?.display_name || ''} 
-                              onChange={e => setEditingRole({...editingRole, display_name: e.target.value})}
-                              className={`w-full bg-gray-50 border ${errors.display_name ? 'border-red-500 ring-2 ring-red-50' : 'border-gray-100'} rounded-2xl px-6 py-4 font-bold outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all text-gray-900`}
-                              placeholder="e.g. Regional Manager"
-                            />
-                            {errors.display_name && <p className="text-red-500 text-[10px] font-black mt-2 uppercase">{errors.display_name[0]}</p>}
+                      <div className="flex-1 overflow-y-auto p-10 space-y-12 custom-scrollbar">
+                        <div className="space-y-10">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                            <div className="space-y-4">
+                              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">Persona Title (e.g. Sales Director)</label>
+                              <input 
+                                type="text" 
+                                required
+                                value={editingRole?.display_name || ''} 
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  setEditingRole(prev => ({ 
+                                    ...prev, 
+                                    display_name: val,
+                                    name: prev?.id ? prev.name : val.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+                                  }));
+                                }}
+                                className={`w-full bg-gray-50 border ${roleValidationErrors.display_name && touched ? 'border-red-500 ring-4 ring-red-50' : 'border-gray-100 focus:border-indigo-500'} rounded-2xl px-8 py-5 font-black outline-none transition-all text-gray-900 text-lg shadow-inner`}
+                                placeholder="Inventory Analyst"
+                              />
+                              {roleValidationErrors.display_name && touched && <p className="text-red-500 text-[9px] font-black mt-1 uppercase ml-2">{roleValidationErrors.display_name}</p>}
+                            </div>
+                            <div className="space-y-4">
+                              <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest ml-2">Internal Slug (Policy ID)</label>
+                              <input 
+                                type="text" 
+                                readOnly
+                                value={editingRole?.name || ''} 
+                                className={`w-full bg-gray-100 border border-gray-100 rounded-2xl px-8 py-5 font-mono font-bold outline-none text-indigo-400 cursor-not-allowed opacity-60 text-lg`}
+                              />
+                            </div>
                           </div>
-                          <div>
-                            <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">System Identifier Key</label>
-                            <input 
-                              type="text" 
-                              required
-                              value={editingRole?.name || ''} 
-                              onChange={e => setEditingRole({...editingRole, name: e.target.value.toLowerCase().replace(/\s+/g, '-')})}
-                              className={`w-full bg-gray-50 border ${errors.name ? 'border-red-500 ring-2 ring-red-50' : 'border-gray-100'} rounded-2xl px-6 py-4 font-mono font-bold outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all text-indigo-600`}
-                              placeholder="e.g. regional-manager"
-                            />
-                            {errors.name && <p className="text-red-500 text-[10px] font-black mt-2 uppercase">{errors.name[0]}</p>}
+
+                          <div className="bg-indigo-900 p-10 rounded-[3rem] space-y-8 relative overflow-hidden group shadow-2xl shadow-indigo-100">
+                            <div className="flex justify-between items-center relative z-10">
+                               <div className="flex items-center gap-4 text-white">
+                                 <span className="text-3xl">✨</span>
+                                 <div>
+                                   <h4 className="text-xs font-black uppercase tracking-[0.3em]">AI Security Architect</h4>
+                                   <p className="text-[10px] text-indigo-200 font-bold mt-1">Lumina uses Gemini to synthesize optimal policy matrices.</p>
+                                 </div>
+                               </div>
+                               <button 
+                                 type="button"
+                                 onClick={handleAISuggest}
+                                 disabled={isAISuggesting || !editingRole?.display_name}
+                                 className={`px-8 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all shadow-xl flex items-center gap-3 ${isAISuggesting || !editingRole?.display_name ? 'bg-white/10 text-white/30 cursor-not-allowed' : 'bg-white text-indigo-900 hover:bg-indigo-50 active:scale-95'}`}
+                               >
+                                 {isAISuggesting ? <span className="w-4 h-4 border-2 border-indigo-900/20 border-t-indigo-900 rounded-full animate-spin"></span> : "Synthesize Matrix"}
+                               </button>
+                            </div>
+                            <div className="space-y-4 relative z-10">
+                               <label className="block text-[9px] font-black text-indigo-300 uppercase tracking-widest ml-1">Contextual Goal / Job Description</label>
+                               <textarea 
+                                 rows={3}
+                                 value={roleScope}
+                                 onChange={(e) => setRoleScope(e.target.value)}
+                                 className="w-full bg-white/10 border border-white/10 rounded-2xl px-6 py-4 text-sm font-medium text-white placeholder:text-indigo-300/50 outline-none focus:ring-8 focus:ring-white/5 focus:border-white/30 transition-all shadow-inner"
+                                 placeholder="e.g. This user handles warehouse inbound logistics only. They should view products but not change prices or financial settings."
+                               ></textarea>
+                            </div>
+                            <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-white/5 rounded-full blur-3xl group-hover:bg-white/10 transition-colors"></div>
                           </div>
                         </div>
 
-                        <div className="space-y-4">
-                          <div className="flex justify-between items-end">
-                            <div className="space-y-1">
-                              <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest">Permission Node Matrix</h4>
-                              <p className="text-[10px] text-gray-400 font-bold">Configure active gateways for this security context.</p>
+                        {aiReasoning && (
+                          <div className="bg-gray-900 p-8 rounded-[2.5rem] text-white animate-in slide-in-from-top-2 duration-500 border border-gray-800">
+                             <div className="flex items-center gap-3 mb-4">
+                               <span className="text-xl">🧬</span>
+                               <h5 className="text-[10px] font-black uppercase tracking-[0.3em] text-indigo-400">Architectural Logic</h5>
+                             </div>
+                             <p className="text-sm font-medium italic text-indigo-100/80 leading-relaxed">"{aiReasoning}"</p>
+                          </div>
+                        )}
+
+                        <div className="space-y-8">
+                          <div className="flex justify-between items-end px-2">
+                            <div className="space-y-2">
+                              <h4 className="text-xs font-black text-gray-900 uppercase tracking-[0.3em]">Operational Gateways</h4>
+                              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Toggle granular modules below to override AI suggestions.</p>
                             </div>
                             <div className="flex items-center gap-4">
-                              <button 
-                                type="button"
-                                onClick={handleAISuggest}
-                                disabled={isAISuggesting || !editingRole?.display_name}
-                                className="flex items-center gap-2 px-6 py-3 bg-indigo-50 text-indigo-600 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-indigo-600 hover:text-white transition-all disabled:opacity-40 shadow-sm"
-                              >
-                                {isAISuggesting ? <><span className="w-3 h-3 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin"></span> Thinking...</> : <>✨ AI Suggest Policy</>}
-                              </button>
-                              <div className="flex items-center gap-3 p-2 bg-gray-50 border border-gray-100 rounded-xl">
-                                <span className="text-[9px] font-black text-gray-400 uppercase">Status</span>
+                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Active State</span>
                                 <button 
                                   type="button"
                                   onClick={() => setEditingRole({...editingRole, is_active: !editingRole?.is_active})}
-                                  className={`px-4 py-1.5 rounded-lg text-[9px] font-black transition-all ${editingRole?.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-500'}`}
+                                  className={`px-6 py-2 rounded-xl text-[10px] font-black tracking-widest transition-all ${editingRole?.is_active ? 'bg-green-100 text-green-700 shadow-sm' : 'bg-gray-100 text-gray-500'}`}
                                 >
-                                  {editingRole?.is_active ? 'ACTIVE' : 'OFFLINE'}
+                                  {editingRole?.is_active ? 'ENABLED' : 'DISABLED'}
                                 </button>
-                              </div>
                             </div>
                           </div>
-                          {errors.permissions && <p className="text-red-500 text-[10px] font-black uppercase">{errors.permissions[0]}</p>}
+                          
+                          {roleValidationErrors.permissions && touched && <p className="text-red-500 text-[10px] font-black uppercase text-center py-6 bg-red-50 rounded-2xl border border-red-100">{roleValidationErrors.permissions}</p>}
+                          
                           <PermissionMatrix 
                             rolesPermissions={editingRole?.permissions} 
                             onToggle={handleTogglePermission}
@@ -304,14 +364,17 @@ const Settings: React.FC<SettingsProps> = ({ notify, removeNotify }) => {
                         </div>
                       </div>
 
-                      <div className="p-10 border-t border-gray-100 flex justify-end gap-4 bg-gray-50/50">
-                        <button type="button" onClick={() => setShowRoleModal(false)} className="px-10 py-3 rounded-2xl font-black text-gray-400 hover:text-gray-900 transition-all">Discard</button>
+                      <div className="p-10 border-t border-gray-100 flex flex-col sm:flex-row justify-end gap-6 bg-gray-50/50 flex-shrink-0">
+                        <button type="button" onClick={() => setShowRoleModal(false)} className="px-10 py-5 rounded-2xl font-black text-gray-400 hover:text-gray-900 transition-all uppercase text-[10px] tracking-widest">Discard Ledger</button>
                         <button 
                           type="submit" 
-                          disabled={isSubmitting}
-                          className="px-14 py-4 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 shadow-xl shadow-indigo-100 disabled:opacity-50 flex items-center gap-2 active:scale-95 transition-all"
+                          disabled={isSubmitting || (touched && !isRoleValid)}
+                          className={`
+                            px-16 py-5 rounded-[1.5rem] font-black transition-all active:scale-95 flex items-center justify-center gap-4 uppercase text-[10px] tracking-[0.3em]
+                            ${(!isRoleValid && touched) ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-2xl shadow-indigo-100'}
+                          `}
                         >
-                          {isSubmitting ? <><span className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></span> Processing...</> : 'Save Policy Identity'}
+                          {isSubmitting ? <span className="w-5 h-5 border-3 border-white/20 border-t-white rounded-full animate-spin"></span> : 'Commit Persona'}
                         </button>
                       </div>
                     </form>
@@ -321,25 +384,16 @@ const Settings: React.FC<SettingsProps> = ({ notify, removeNotify }) => {
             </div>
           )}
           
-          {activeTab === 'general' && (
-            <div className="space-y-10 animate-in fade-in duration-300">
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                 <div className="col-span-2">
-                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Enterprise Official Name</label>
-                   <input type="text" value={settings.store_name} onChange={e => setSettings({...settings, store_name: e.target.value})} className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 font-black outline-none text-gray-900" />
-                 </div>
-                 <div>
-                   <label className="block text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3">Primary Treasury Currency</label>
-                   <select className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 font-black outline-none text-gray-900">
-                     <option value="USD">United States Dollar (USD)</option>
-                     <option value="EUR">Euro (EUR)</option>
-                     <option value="GBP">Pound Sterling (GBP)</option>
-                   </select>
-                 </div>
+          {activeTab !== 'rbac' && (
+            <div className="flex flex-col items-center justify-center py-32 text-center space-y-4">
+               <span className="text-6xl grayscale opacity-30">🛠️</span>
+               <div>
+                  <h4 className="text-xl font-black text-gray-400">Node Configuration Segment</h4>
+                  <p className="text-sm font-medium text-gray-300">This module is currently undergoing periodic architectural sync.</p>
                </div>
             </div>
           )}
-        </div>
+        </main>
       </div>
     </div>
   );

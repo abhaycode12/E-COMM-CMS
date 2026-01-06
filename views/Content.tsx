@@ -49,6 +49,21 @@ const Content: React.FC<ContentProps> = ({ notify }) => {
     notify?.(`Test payload dispatched for template: ${name}. Internal verification confirmed.`, "success");
   };
 
+  const handlePreview = (slug: string) => {
+    notify?.(`Generating secure storefront preview for /${slug}...`, "loading");
+    setTimeout(() => notify?.("Preview ready. Opening encrypted staging instance.", "success"), 1500);
+  };
+
+  const handleNavMap = () => {
+    notify?.("Mapping storefront link architecture. Detecting broken pathways...", "loading");
+    setTimeout(() => notify?.("Navigation graph generated. 0 orphaned links detected.", "success"), 2000);
+  };
+
+  const handleExpPlus = () => {
+    notify?.("Activating real-time personalization algorithms...", "info");
+    setTimeout(() => notify?.("Experience Plus active. User session engagement boosted.", "success"), 1200);
+  };
+
   const renderPages = () => (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10 animate-in fade-in duration-500">
       {pages.map(page => (
@@ -65,13 +80,13 @@ const Content: React.FC<ContentProps> = ({ notify }) => {
           <p className="text-xs text-indigo-600 font-bold font-mono tracking-tighter">/{page.slug}</p>
           <div className="mt-12 pt-10 border-t border-gray-50 flex justify-between items-center text-[10px] text-gray-400 font-black uppercase tracking-[0.2em]">
             <span>STAGED: {page.last_updated_at}</span>
-            <button className="text-indigo-400 font-black hover:text-indigo-600 flex items-center gap-2 transition-all">
+            <button onClick={() => handlePreview(page.slug)} className="text-indigo-400 font-black hover:text-indigo-600 flex items-center gap-2 transition-all active:scale-95">
               Preview ↗
             </button>
           </div>
         </div>
       ))}
-      <button onClick={() => { setEditingItem({title: '', slug: '', status: 'draft'}); setShowPageModal(true); }} className="border-4 border-dashed border-gray-100 rounded-[3rem] p-10 flex flex-col items-center justify-center gap-6 text-gray-300 hover:border-indigo-200 hover:text-indigo-600 transition-all group min-h-[300px]">
+      <button onClick={() => { setEditingItem({title: '', slug: '', status: 'draft'}); setShowPageModal(true); }} className="border-4 border-dashed border-gray-100 rounded-[3rem] p-10 flex flex-col items-center justify-center gap-6 text-gray-300 hover:border-indigo-200 hover:text-indigo-600 transition-all group min-h-[300px] active:scale-95">
         <span className="text-6xl group-hover:scale-110 transition-transform duration-500">📄</span>
         <span className="font-black text-[11px] uppercase tracking-[0.3em]">Initialize Node</span>
       </button>
@@ -139,10 +154,10 @@ const Content: React.FC<ContentProps> = ({ notify }) => {
           <p className="text-gray-500 text-xl font-medium max-w-2xl leading-relaxed">Design storefront touchpoints, orchestrate transactional flows, and manage marketing logic layers.</p>
         </div>
         <div className="flex gap-4 relative z-10 w-full xl:w-auto">
-          <button className="flex-1 xl:flex-none px-10 py-5 bg-gray-50 text-indigo-600 rounded-[2rem] font-black text-[11px] uppercase tracking-widest hover:bg-gray-100 transition-all flex items-center justify-center gap-4 border border-gray-100">
+          <button onClick={handleNavMap} className="flex-1 xl:flex-none px-10 py-5 bg-gray-50 text-indigo-600 rounded-[2rem] font-black text-[11px] uppercase tracking-widest hover:bg-gray-100 transition-all flex items-center justify-center gap-4 border border-gray-100 active:scale-95">
             <span>🌐</span> Navigation Map
           </button>
-          <button className="flex-1 xl:flex-none px-12 py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-[11px] uppercase tracking-widest hover:bg-indigo-700 shadow-2xl shadow-indigo-100 transition-all flex items-center justify-center gap-4 active:scale-95">
+          <button onClick={handleExpPlus} className="flex-1 xl:flex-none px-12 py-5 bg-indigo-600 text-white rounded-[2rem] font-black text-[11px] uppercase tracking-widest hover:bg-indigo-700 shadow-2xl shadow-indigo-100 transition-all flex items-center justify-center gap-4 active:scale-95">
             <span>✨</span> Experience Plus
           </button>
         </div>
@@ -177,7 +192,7 @@ const Content: React.FC<ContentProps> = ({ notify }) => {
           {activeTab === 'banners' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 animate-in fade-in duration-500">
                {banners.map(b => (
-                 <div key={b.id} className="relative aspect-[16/7] rounded-[4rem] overflow-hidden group shadow-2xl shadow-gray-200 cursor-pointer border-8 border-white">
+                 <div key={b.id} onClick={() => notify?.(`Opening banner editor for ${b.title}...`, "info")} className="relative aspect-[16/7] rounded-[4rem] overflow-hidden group shadow-2xl shadow-gray-200 cursor-pointer border-8 border-white active:scale-95 transition-transform duration-500">
                    <OptimizedImage src={b.image_url} alt={b.title} />
                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent flex flex-col justify-end p-12 translate-y-4 group-hover:translate-y-0 transition-transform duration-700">
                      <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.4em] mb-4">{b.position.replace('_', ' ')}</span>

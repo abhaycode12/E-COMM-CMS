@@ -145,21 +145,36 @@ export const generateSEOTags = async (productName: string, description: string) 
   }
 };
 
-export const suggestPermissions = async (roleName: string): Promise<{ permissions: string[], reasoning: string } | null> => {
+export const suggestPermissions = async (roleName: string, scope?: string): Promise<{ permissions: string[], reasoning: string } | null> => {
   const ai = getAI();
   const systemInstruction = `
     You are a Security Policy Architect for an Enterprise E-commerce CMS.
-    Based on the Role Name provided, suggest a set of granular permissions following the principle of least privilege.
+    Based on the Role Name and optional Job Scope/Description provided, suggest a set of granular permissions following the principle of least privilege.
+    
     Available Modules: users, roles, products, categories, orders, customers, payments, reports, settings, content.
     Available Actions: view, create, edit, delete, approve, export.
+    
     Permission format: module.action (e.g., products.view).
-    Return a JSON object.
+    
+    Guidelines:
+    - If the role/scope mentions "View only" or "Read", only include 'view' actions.
+    - If it's a "Manager", give 'view', 'edit', and 'create' across relevant modules.
+    - If it's "Support", focus on customers and orders.
+    - If it's "Warehouse", focus on products, categories (view), and orders (view).
+    
+    Return a structured JSON object.
+  `;
+
+  const userPrompt = `
+    Role Name: "${roleName}"
+    ${scope ? `Intended Scope: "${scope}"` : ""}
+    Please synthesize a relevant security policy.
   `;
 
   try {
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Suggest permissions for a role named: "${roleName}"`,
+      contents: userPrompt,
       config: {
         systemInstruction,
         responseMimeType: "application/json",
@@ -173,7 +188,7 @@ export const suggestPermissions = async (roleName: string): Promise<{ permission
             },
             reasoning: {
               type: Type.STRING,
-              description: "Brief explanation of why these permissions were selected"
+              description: "A professional, one-sentence explanation of why these permissions were chosen for this specific persona."
             }
           },
           required: ["permissions", "reasoning"]

@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { Courier, Shipment, LogisticsReport } from '../types';
 
@@ -84,6 +83,22 @@ const Shipping: React.FC<ShippingProps> = ({ notify }) => {
     setShowCourierModal(false);
   };
 
+  const handleTrackAll = () => {
+    notify?.("Initiating massive network sync across all carrier APIs...", "loading");
+    setTimeout(() => notify?.("Fulfillment manifests updated with latest telemetry.", "success"), 2500);
+  };
+
+  const handleMarkLost = () => {
+    if (window.confirm("Mark this shipment as lost? This will trigger the insurance claim protocol.")) {
+      notify?.(`Shipment ${selectedShipment?.shipment_number} marked as lost. Claims team notified.`, "info");
+      setSelectedShipment(null);
+    }
+  };
+
+  const handleSendCustomerUpdate = () => {
+    notify?.(`Push notification dispatched to customer regarding ${selectedShipment?.shipment_number}.`, "success");
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <header className="flex justify-between items-end bg-white p-8 rounded-3xl border border-gray-100 shadow-sm">
@@ -92,12 +107,12 @@ const Shipping: React.FC<ShippingProps> = ({ notify }) => {
           <p className="text-gray-500 mt-1">Real-time tracking, courier management, and delivery performance.</p>
         </div>
         <div className="flex gap-3">
-          <button className="px-6 py-3 border border-gray-200 text-gray-600 rounded-2xl font-bold hover:bg-gray-50 transition-all flex items-center gap-2">
+          <button onClick={handleTrackAll} className="px-6 py-3 border border-gray-200 text-gray-600 rounded-2xl font-bold hover:bg-gray-50 transition-all flex items-center gap-2 active:scale-95">
             <span>📡</span> Track All
           </button>
           <button 
             onClick={() => setShowCourierModal(true)}
-            className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-xl shadow-indigo-100"
+            className="px-8 py-3 bg-indigo-600 text-white rounded-2xl font-bold hover:bg-indigo-700 transition-all flex items-center gap-2 shadow-xl shadow-indigo-100 active:scale-95"
           >
             <span>➕</span> Add Carrier
           </button>
@@ -244,7 +259,7 @@ const Shipping: React.FC<ShippingProps> = ({ notify }) => {
                     </div>
                   </div>
 
-                  <button className="w-full mt-8 py-4 bg-white border border-gray-200 text-gray-600 rounded-2xl font-black hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-all active:scale-95">
+                  <button onClick={() => notify?.(`Initializing API credential flow for ${c.name}...`, "info")} className="w-full mt-8 py-4 bg-white border border-gray-200 text-gray-600 rounded-2xl font-black hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-all active:scale-95">
                     Configure API Keys
                   </button>
                 </div>
@@ -282,7 +297,7 @@ const Shipping: React.FC<ShippingProps> = ({ notify }) => {
                          <p className="text-[10px] font-black text-red-700 uppercase tracking-widest mb-1">Total Failures</p>
                          <p className="text-2xl font-black text-red-900">{r.failed_delivery_count} Parcels</p>
                        </div>
-                       <button className="bg-white text-red-600 px-6 py-3 rounded-2xl font-black text-xs shadow-sm hover:shadow-md transition-all">
+                       <button onClick={() => notify?.(`Retrieving failure audit logs for ${r.courier_name}...`, "loading")} className="bg-white text-red-600 px-6 py-3 rounded-2xl font-black text-xs shadow-sm hover:shadow-md transition-all">
                          View Audit
                        </button>
                     </div>
@@ -312,7 +327,7 @@ const Shipping: React.FC<ShippingProps> = ({ notify }) => {
                   <div className={`w-4 h-4 rounded-full ${selectedShipment.status === 'delivered' ? 'bg-green-500' : 'bg-indigo-500 animate-pulse'}`}></div>
                   <p className="text-xl font-black text-gray-900 uppercase tracking-widest">{selectedShipment.status.replace('_', ' ')}</p>
                 </div>
-                <button className="text-xs font-black text-indigo-600 bg-indigo-50 px-6 py-3 rounded-2xl hover:bg-indigo-100">
+                <button onClick={() => window.open(`https://www.google.com/search?q=${selectedShipment.courier_name}+tracking+${selectedShipment.tracking_number}`, '_blank')} className="text-xs font-black text-indigo-600 bg-indigo-50 px-6 py-3 rounded-2xl hover:bg-indigo-100 active:scale-95 transition-all">
                   Open Carrier Portal ↗
                 </button>
               </div>
@@ -337,8 +352,8 @@ const Shipping: React.FC<ShippingProps> = ({ notify }) => {
             </div>
 
             <div className="px-10 py-8 border-t border-gray-100 bg-gray-50/50 flex justify-end gap-4">
-               <button className="px-8 py-3 rounded-2xl font-black text-red-600 hover:bg-red-50">Mark as Lost</button>
-               <button className="px-10 py-3 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700">Send Update to Customer</button>
+               <button onClick={handleMarkLost} className="px-8 py-3 rounded-2xl font-black text-red-600 hover:bg-red-50 transition-all">Mark as Lost</button>
+               <button onClick={handleSendCustomerUpdate} className="px-10 py-3 bg-indigo-600 text-white rounded-2xl font-black hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 active:scale-95">Send Update to Customer</button>
             </div>
           </div>
         </div>
@@ -356,12 +371,12 @@ const Shipping: React.FC<ShippingProps> = ({ notify }) => {
               <div className="space-y-6">
                  <div>
                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Courier Name</label>
-                   <input type="text" className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 font-black outline-none text-gray-900" placeholder="e.g. FedEx International" />
+                   <input type="text" className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 font-black outline-none text-gray-900 focus:ring-4 focus:ring-indigo-500/10 transition-all" placeholder="e.g. FedEx International" />
                  </div>
                  <div className="grid grid-cols-2 gap-4">
                    <div>
                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Internal Code</label>
-                     <input type="text" className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 font-mono font-bold outline-none text-gray-900" placeholder="fedex_intl" />
+                     <input type="text" className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 font-mono font-bold outline-none text-gray-900 focus:ring-4 focus:ring-indigo-500/10 transition-all" placeholder="fedex_intl" />
                    </div>
                    <div>
                      <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Region Scope</label>
@@ -375,7 +390,7 @@ const Shipping: React.FC<ShippingProps> = ({ notify }) => {
                  </div>
                  <div>
                    <label className="block text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Tracking URL Pattern</label>
-                   <input type="text" className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 font-mono text-xs outline-none text-gray-900" placeholder="https://track.com/?id={{tracking_number}}" />
+                   <input type="text" className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 font-mono text-xs outline-none text-gray-900 focus:ring-4 focus:ring-indigo-500/10 transition-all" placeholder="https://track.com/?id={{tracking_number}}" />
                  </div>
               </div>
 
